@@ -1,0 +1,32 @@
+# Ignore test files and files that can be downloaded online
+test
+moneyPuck/*.csv
+test*.*
+
+# Also the databases needed are created by the scripts, those do not need to be stored online
+*.db
+
+# Ignore some personal planning files
+ideasTodoWithData.txt
+roadmap.txt
+
+# Ignore html files created by the scripts
+*.html
+
+# Ignore project files created by xcode, not sure why they are here
+nhl
+
+# Ignore test json files, only include the final city json file
+cityCoordinates.json
+cityCoordinatesUpdated.json
+cityCoordinatesUpdatedAgain.json
+trimmedCityCoordinates.json
+
+# Ignore python cache
+__pycache__
+
+# Ignore Jupyter checkpoints
+.ipynb_checkpoints
+
+# Ignore the virtual environment, this should be created by the user
+nhlEnvironment

@@ -1,0 +1,11 @@
+1. Create the virtual environment. (Only needed to be done once, afterwards you can just activate existing environment)
+
+python3 -m venv nhlEnvironment
+
+2. Activate the virtual environment
+
+source nhlEnvironment/bin/activate
+
+3. Deactivate the virtual environment
+
+deactivate
