@@ -13,9 +13,6 @@ roadmap.txt
 # Ignore html files created by the scripts
 *.html
 
-# Ignore project files created by xcode, not sure why they are here
-nhl
-
 # Ignore test json files, only include the final city json file
 cityCoordinates.json
 cityCoordinatesUpdated.json

@@ -1,88 +1,36 @@
 # Macro to analyze and visualize goalie statistics
-# Combine data from MoneyPuck and NHL API for this
-# Maybe at some point I will create my own SQL database with all the information
-# But for now, these will suffice
+# The data is read from SQL database
 
-import pandas
-from nhlpy import NHLClient
-
-# Make a scatter plot with goalie data using pyplot
-#
-#  Arguments:
-#   goalieData = pandas DataFrame containing studied goalie data
-#   xAxis = Label in the DataFrame to be used as x-axis
-#   yAxis = Label in the DataFrame to be used as y-axis
-#   hoverText = Show the goalie names when hovering mouse over points in the plot. Default = True
-#   printNames = Print the goalie names next to the data points. Default = True
-#   diagonalLine = Draw a diagonal line to the plot. Default = False
-#   minGamesPlayed = Minimum number of games played to be included in the plot. Default = 20
-def scatterWithPyplot(goalieData, xAxis, yAxis, hoverText = True, printNames = True, diagonalLine = False, minGamesPlayed = 20):
-
-    import matplotlib.pyplot as plt
-    import mplcursors
-
-    # Use the filter for minimum number of games played
-    filteredGoalies = goalieData[goalieData["gamesPlayed"] >= minGamesPlayed]
-
-    # Illustrate the data as a scatter plot
-    goaliePlot, ax = plt.subplots()
-    filteredGoalies.plot(xAxis, yAxis, kind='scatter', ax=ax)
-
-    # Create list of goalie names in same order as scatter points
-    goalieNames = filteredGoalies.index.tolist()
-
-    # Use mplcursors with custom annotations
-    if hoverText:
-        mplcursors.cursor(goaliePlot, hover=True).connect("add", lambda sel: sel.annotation.set_text(goalieNames[sel.index]))
-  
-    # Associate a player for each point
-    if printNames:
-        for goalieIndex, stats in filteredGoalies.iterrows():
-            ax.annotate(goalieIndex,
-                        xy=(stats[xAxis], stats[yAxis]),
-                        xytext=(5,0), textcoords='offset points',
-                        family='sans-serif', fontsize=4, color='darkslategrey')
-                        
-    # Draw a diagonal line to visualize which goalies same more goals than expected
-    if diagonalLine:
-        xMin = filteredGoalies[xAxis].min()
-        xMax = filteredGoalies[xAxis].max()
-        yMin = filteredGoalies[yAxis].min()
-        yMax = filteredGoalies[yAxis].max()
-        globalMin = min(xMin, yMin)
-        globalMax = max(xMax, yMax)
-        plt.plot([globalMin,globalMax], [globalMin,globalMax])
-                    
-    # Show the plot
-    plt.show()
+import sys
+import pandas as pd
+import sqlite3
     
-# Make a scatter plot with goalie data using plotly
-#
-#  Arguments:
-#   goalieData = pandas DataFrame containing studied goalie data
-#   xAxis = Label in the DataFrame to be used as x-axis
-#   yAxis = Label in the DataFrame to be used as y-axis
-#   diagonalLine = Draw a diagonal line to the plot. Default = False
-#   minGamesPlayed = Minimum number of games played to be included in the plot. Default = 20
 def scatterWithPlotly(goalieData, xAxis, yAxis, diagonalLine = False, minGamesPlayed = 20):
+    """
+     Make a scatter plot with goalie data using plotly
+
+    Arguments:
+        goalieData = pandas DataFrame containing studied goalie data
+        xAxis = Label in the DataFrame to be used as x-axis
+        yAxis = Label in the DataFrame to be used as y-axis
+        diagonalLine = Draw a diagonal line to the plot. Default = False
+        minGamesPlayed = Minimum number of games played to be included in the plot. Default = 20
+    """
 
     import plotly.graph_objects as go
 
     # Use the filter for minimum number of games played
-    filteredGoalies = goalieData[goalieData["gamesPlayed"] >= minGamesPlayed]
-    
-    # Reset index so goalie names are a column
-    df = filteredGoalies.reset_index().rename(columns={'index': 'goalieName'})
+    filteredGoalies = goalieData[goalieData["games_played"] >= minGamesPlayed]
 
     # Create a plotly graph objects figure
     fig = go.Figure()
     
     # Add the scatter plot to the figure
     fig.add_trace(go.Scatter(
-        x=df[xAxis],
-        y=df[yAxis],
+        x=filteredGoalies[xAxis],
+        y=filteredGoalies[yAxis],
         mode='markers',
-        text=df['goalieName'],
+        text=filteredGoalies['first_name'] + " " + filteredGoalies['last_name'],
         hovertemplate='<b>%{text}</b><br>' + xAxis + ': %{x:.2f}<br>' + yAxis + ': %{y:.2f}<extra></extra>',
         marker=dict(size=8, color='blue'),
         name='All Goalies'
@@ -93,12 +41,13 @@ def scatterWithPlotly(goalieData, xAxis, yAxis, diagonalLine = False, minGamesPl
     # Create dropdown buttons for each goalie
     buttons = [dict(label='All Goalies',
                     method='update',
-                    args=[{'marker.color': [['blue']*len(df)]},
+                    args=[{'marker.color': [['blue']*len(filteredGoalies)]},
                           {'title': 'All Goalies'}])]
                           
-    for idx, goalie in enumerate(df['goalieName']):
-        colors = ['lightgray'] * len(df)
+    for idx, goalie_info in enumerate(filteredGoalies.itertuples(index=False)):
+        colors = ['lightgray'] * len(filteredGoalies)
         colors[idx] = 'red'  # Highlight selected goalie
+        goalie = f"{goalie_info.first_name} {goalie_info.last_name}"
         buttons.append(
             dict(label=goalie,
                  method='update',
@@ -131,6 +80,7 @@ def scatterWithPlotly(goalieData, xAxis, yAxis, diagonalLine = False, minGamesPl
     )
     
     # Add title as annotation in order to have same centering as the disclaimer
+    # TODO: text should not be hardcoded
     fig.add_annotation(
         text='NHL goalie performance for season 2025-2026',
         xref='paper',
@@ -143,8 +93,9 @@ def scatterWithPlotly(goalieData, xAxis, yAxis, diagonalLine = False, minGamesPl
     )
     
     # Add a disclaimer telling the data source
+    # TODO: text should not be hardcoded
     fig.add_annotation(
-        text='Data for the figure is dowloaded from moneypuck.com on March 15, 2026. All goalies with at least {} played games are included.'.format(minGamesPlayed),
+        text='Data for the figure is dowloaded from moneypuck.com on April 9, 2026. All goalies with at least {} played games are included.'.format(minGamesPlayed),
         xref='paper',
         yref='paper',
         x=0.5,
@@ -173,61 +124,48 @@ def scatterWithPlotly(goalieData, xAxis, yAxis, diagonalLine = False, minGamesPl
     # Save the figure to a file
     fig.write_html("goaliePlot.html")
     
-
-# Collect the data from MoneyPuck csv file and NHL API
-def collectGoalieData():
     
-    # Start with expected goals agains vs. goals agains
-    goalie = []
-    goalsAgains = []
-    expectedGoalsAgainst = []
-    gamesPlayed = []
-    iceTime = []
-
-    # The input is in csv format, use Python reader for csv
-    import csv
-    with open('moneyPuck/goalies_season2526_2026-03-15.csv', newline='') as csvfile:
-
-        # Since the file as column labels in the first row and values in the following rows, DictReader work well
-        # Each row return a dictionary with keys defined by the strings in the first row
-        moneyPuckReader = csv.DictReader(csvfile)
-        for row in moneyPuckReader:
+def collectGoalieData(season, phase, situation):
+    """
+    Read the goalie data for the specified season
     
-            # In this example, we want to get all stituation goals and expected goals for each team
-            if row["situation"] == "all":
-            
-                goalie.append(row["name"])
-                goalsAgains.append(float(row["goals"])) # Note that csv reader returns each value as string
-                expectedGoalsAgainst.append(float(row["xGoals"])) # Note that csv reader returns each value as string
-                gamesPlayed.append(int(row["games_played"]))
-                iceTime.append(float(row["icetime"]))
-                
-    # TODO: Add things like goals agains average and save percentage from NHL API
+    Arguments:
+        season = Season for which the goalia data is read
+        phase = "regular" for regular season or "playoffs" for playoffs
+        situation = Play type: all, 5on5, 5on4, 4on5 or other
+        
+    Return:
+        pandas dataframe containing contents of simple goalie stats view form NHL database.
+    """
     
-    # Add the collected data to pandas dataframe and return the dataframe
-    goalieData = {"goalsAgainst": goalsAgains, "expectedGoalsAgainst": expectedGoalsAgainst, "gamesPlayed": gamesPlayed, "iceTime": iceTime}
-    goalieDataFrame = pandas.DataFrame(goalieData, index = goalie)
+    # Check that input is good
+    if phase not in ["regular", "playoffs"]:
+        sys.exit("Error in collectGoalieData!\nThe phase parameter must be either regular or playoffs")
+        
+    if situation not in ["all", "5on5", "5on4", "4on5", "other"]:
+        sys.exit("Error in collectGoalieData!\nThe situation parameter must be all, 5on5, 5on4, 4on5 or other")
     
-    # Normalize the goals agains and expected goals agains per 60 minutes played
-    # Note: MoneyPuck gives the icetime in seconds. To transform this into 60 minute chunks
-    # it needs to me divided bo 60*60 = 3600
-    goalieDataFrame["goalsAgainstPer60"] = goalieDataFrame["goalsAgainst"] / goalieDataFrame["iceTime"] * 3600.0
-    goalieDataFrame["expectedGoalsAgainstPer60"] = goalieDataFrame["expectedGoalsAgainst"] / goalieDataFrame["iceTime"] * 3600.0
+    # Connect to the database that contains player and city information
+    connection = sqlite3.connect('nhlDatabase.db')
     
-    # Sort the DataFrame to be in alphabatical order based on surname
-    goalieDataFrame.sort_index(
-        key=lambda x: pandas.Series(x).str.split(n=1).apply(lambda name: (name[1], name[0])),
-        inplace=True
-    )
+    # Read the goalie information from the database
+    sql_query = "SELECT * FROM simple_goalie_stats \
+                 WHERE season = ? AND phase = ? AND situation = ? \
+                 ORDER BY last_name, first_name"
+    goalieDataFrame = pd.read_sql_query(sql_query, connection, params=(season, phase, situation))
     
+    # Close the connection to the database
+    connection.close()
+    
+    # Return the dataframe
     return goalieDataFrame
 
-# Main function
-# Select which visualizations to make
 def main():
-    goalieData = collectGoalieData()
-    #scatterWithPyplot(goalieData, "goalsAgainstPer60", "expectedGoalsAgainstPer60", printNames = False, diagonalLine = True)
-    scatterWithPlotly(goalieData, "goalsAgainstPer60", "expectedGoalsAgainstPer60", diagonalLine = True)
+    """
+    Main function. Currently just for testing the plotter
+    """
+    goalieData = collectGoalieData(2025, "regular", "all")
+    scatterWithPlotly(goalieData, "goals_against_average", "xGoals_against_average", diagonalLine = True)
 
 # Follow good coding practices
 if __name__ == "__main__":

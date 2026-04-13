@@ -99,7 +99,8 @@ class NHLPlayerData:
     
     def __init__(self):
         self.data = {}
-        self.data[8478905] = {"birthCity": "Lappeenranta", "birthCountry": "FIN"}
+        self.data[8478905] = {"birthCity": "Lappeenranta", "birthState": "", "birthCountry": "FIN"}
+        self.data[8486169] = {"birthCity": "Gilbert", "birthState": "AZ", "birthCountry": "USA"}
         
     def get_birth_city(self, player_id):
         """
@@ -112,3 +113,9 @@ class NHLPlayerData:
         Getter for birth country based on player_id
         """
         return self.data[player_id]["birthCountry"]
+        
+    def get_birth_state(self, player_id):
+        """
+        Getter for birth state based on player_id
+        """
+        return self.data[player_id]["birthState"]

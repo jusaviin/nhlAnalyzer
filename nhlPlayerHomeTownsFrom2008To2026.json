@@ -13853,5 +13853,45 @@
         "country": "Canada",
         "state": "Ontario",
         "state_code": "ON"
+    },
+    "STOCKHOLM": {
+        "coordinates": [
+            59.3251172,
+            18.0710935
+        ],
+        "nameLocal": "Stockholm",
+        "nameEnglish": "Stockholm",
+        "country": "Sweden"
+    },
+    "Valašské Meziříčí": {
+        "coordinates": [
+            49.4716056,
+            17.971593
+        ],
+        "nameLocal": "Valašské Meziříčí",
+        "nameEnglish": "Valašské Meziříčí",
+        "country": "Czechia"
+    },
+    "Hauppauge, NY": {
+        "coordinates": [
+            40.8237354,
+            -73.2062289
+        ],
+        "nameLocal": "Hauppauge",
+        "nameEnglish": "Hauppauge",
+        "country": "United States",
+        "state": "New York",
+        "state_code": "NY"
+    },
+    "Gilbert, AZ": {
+        "coordinates": [
+            33.3527632,
+            -111.789037
+        ],
+        "nameLocal": "Gilbert",
+        "nameEnglish": "Gilbert",
+        "country": "United States",
+        "state": "Arizona",
+        "state_code": "AZ"
     }
 }

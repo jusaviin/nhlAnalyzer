@@ -43,18 +43,18 @@ CURRENTPLAYOFF=${CURRENTPLAYOFF:-false}
 OLDSEASONS=${OLDSEASONS:-false}
 OLDPLAYOFFS=${OLDPLAYOFFS:-false}
 
-# Get today's date for the current season files
-TODAY=$(date +"%Y-%m-%d")
+# Define the current season
+# TODAY=$(date +"%Y-%m-%d") # Adding today makes updating data more annoying
 CURRENTYEAR=2025
 
 # Download all files for the current season
 # Sleep 1 second after each request to be polite and not overwhelm the servers
 if $CURRENTSEASON; then
-  curl -L -H "User-Agent: Mozilla/5.0" -o "skaters_${CURRENTYEAR}_regular_${TODAY}.csv" "https://moneypuck.com/moneypuck/playerData/seasonSummary/${CURRENTYEAR}/regular/skaters.csv"
+  curl -L -H "User-Agent: Mozilla/5.0" -o "skaters_${CURRENTYEAR}_regular.csv" "https://moneypuck.com/moneypuck/playerData/seasonSummary/${CURRENTYEAR}/regular/skaters.csv"
   sleep 1
-  curl -L -H "User-Agent: Mozilla/5.0" -o "goalies_${CURRENTYEAR}_regular_${TODAY}.csv" "https://moneypuck.com/moneypuck/playerData/seasonSummary/${CURRENTYEAR}/regular/goalies.csv"
+  curl -L -H "User-Agent: Mozilla/5.0" -o "goalies_${CURRENTYEAR}_regular.csv" "https://moneypuck.com/moneypuck/playerData/seasonSummary/${CURRENTYEAR}/regular/goalies.csv"
   sleep 1
-  curl -L -H "User-Agent: Mozilla/5.0" -o "teams_${CURRENTYEAR}_regular_${TODAY}.csv" "https://moneypuck.com/moneypuck/playerData/seasonSummary/${CURRENTYEAR}/regular/teams.csv"
+  curl -L -H "User-Agent: Mozilla/5.0" -o "teams_${CURRENTYEAR}_regular.csv" "https://moneypuck.com/moneypuck/playerData/seasonSummary/${CURRENTYEAR}/regular/teams.csv"
   sleep 1
 fi
 

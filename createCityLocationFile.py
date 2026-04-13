@@ -31,7 +31,12 @@ def formatCityName(player):
     else:
         data_provider = NHLPlayerData()
         city = data_provider.get_birth_city(player["id"])
+        state = data_provider.get_birth_state(player["id"])
         countryCode = data_provider.get_birth_country(player["id"])
+        
+        if state != "":
+            state = ", {}".format(state)
+            city = city + state
     
     # Transform the country code to full country name to be used in geolocation
     # Comma is there so separate country from the name for the geolocator
@@ -152,7 +157,7 @@ def main():
     client = NHLClient()
 
     # Define the seasons for which the rosters are scanned
-    seasons = ["20082009"]
+    seasons = ["20252026"]
 
     # Loop over seasons
     for currentSeason in seasons:

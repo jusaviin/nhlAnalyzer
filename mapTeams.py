@@ -3,55 +3,10 @@
 import sqlite3
 import pandas as pd
 
-# Find the name with proper accents from NHL API
-def getAccentedName(player, nameString):
-    
-    # If there are no alternative formats for the name, return default format
-    if len(player[nameString]) == 1:
-        return player[nameString]["default"]
-        
-    # If there are other formats, try to find the local language
-    if player["birthCountry"] == "FIN":
-        if "fi" in player[nameString]:
-            return player[nameString]["fi"]
-            
-    if player["birthCountry"] == "SWE" or player["birthCountry"] == "DKN" or player["birthCountry"] == "NOR":
-        if "sv" in player[nameString]:
-            return player[nameString]["sv"]
-            
-    if player["birthCountry"] == "CZE" or player["birthCountry"] == "SVK":
-        if "cs" in player[nameString]:
-            return player[nameString]["cs"]
-            
-    if player["birthCountry"] == "DEU" or player["birthCountry"] == "CHE":
-        if "de" in player[nameString]:
-            return player[nameString]["de"]
-            
-    if player["birthCountry"] == "AUT":
-        if "de" in player[nameString]:
-            return player[nameString]["de"]
-        if "cs" in player[nameString]:
-            return player[nameString]["cs"]
-            
-    # There are a lot of Canadian players that might have French pronunciation for their name
-    # This might be valid also for French and Swiss players, so do not have country specific argument
-    if "fr" in player[nameString]:
-        return player[nameString]["fr"]
-            
-        
-    # If we cannot find properly accented name, just use the default name
-    return player[nameString]["default"]
-
-# To get accents properly in player names, we need find if there is local name available in NHL API
-def determinePlayerName(player):
-    
-    # Get properly accented first and last names and put them together
-    firstName = getAccentedName(player, "firstName")
-    lastName = getAccentedName(player, "lastName")
-    return firstName + " " + lastName
-
-# Actual team mapping functions. Maps players from all the teams in the list
-def mapTeams(mappedTeams):
+def mapTeams(mappedTeamsAndSeasons):
+    """
+    Main function. Connects to SQLite database and calls methods to fill it.
+    """
 
     # Connect to the database that contains player and city information
     connection = sqlite3.connect('nhlDatabase.db')
@@ -62,21 +17,35 @@ def mapTeams(mappedTeams):
         
     # Loop over all the teams we want to map and map their rosters
     mapPoints = {}
-    for team in mappedTeams:
+    for team, season in mappedTeamsAndSeasons:
     
-        # TODO: We should also be able to define which season we want to look at
-        sql_query = f"SELECT p.first_name, p.last_name, p.birth_city, c.name_english, c.latitude, c.longitude  \
-                      FROM players p JOIN cities c \
-                      ON p.birth_city = c.name_NHL_API \
-                      WHERE p.team_code = \'{team}\'"
-        roster = pd.read_sql_query(sql_query, connection)
+        # TODO: If we query multiple teams and same player is in both of them
+        # TODO: (for example we want to plot same team from multiple seasons)
+        # TODO: the same player will show multiple times! Need to build protection
+        # TODO: against this!
+        sql_query = "SELECT player_first_name AS first_name, player_last_name AS last_name, \
+                             city_name_english AS city_name, city_state_code AS state_code, \
+                             city_latitude AS latitude, city_longitude AS longitude  \
+                      FROM roster \
+                      WHERE team_code = ? AND season = ?"
+        roster = pd.read_sql_query(sql_query, connection, params=(team, season))
                 
         # Loop over all the players in the roster
         for player in roster.itertuples(index=False):
                 
             # Find the city where this player was born in
-            city = player.name_english
-            cityKey = player.birth_city
+            city = player.city_name
+            state = player.state_code
+            
+            # TODO: If not state, currently a string "NULL" is inserted instead of NULL value!
+            # Check if the state is NULL in the database
+            if state == "NULL":
+                # If there is no state information, use city directly as city key
+                cityKey = city
+            else:
+                # If state information is included, add this to the city key
+                cityKey = city + ", " + state
+            
             coordinates = [player.latitude, player.longitude]
             playerName = player.first_name + " " + player.last_name
                 
@@ -115,12 +84,14 @@ def mapTeams(mappedTeams):
     connection.close()
 
 
-# Main function
-# Read the list of teams to plot
-# Provide the list to plotter functions
 def main():
-    teams = ["CBJ"]
-    mapTeams(teams)
+    """
+    Main function. Provides a list of teams and seasons to the drawer macro.
+    TODO: More user friendly interface
+    """
+    
+    teamsAndSeasons = [("CHI", 2025), ("CHI", 2015)]
+    mapTeams(teamsAndSeasons)
     
 
 # Follow good coding practices
