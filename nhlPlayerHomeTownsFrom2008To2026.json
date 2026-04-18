@@ -13893,5 +13893,23 @@
         "country": "United States",
         "state": "Arizona",
         "state_code": "AZ"
+    },
+    "Hohenems": {
+        "coordinates": [
+            47.3639973,
+            9.689271
+        ],
+        "nameLocal": "Hohenems",
+        "nameEnglish": "Hohenems",
+        "country": "Austria"
+    },
+    "Valkeakoski": {
+        "coordinates": [
+            61.2655907,
+            24.0304573
+        ],
+        "nameLocal": "Valkeakoski",
+        "nameEnglish": "Valkeakoski",
+        "country": "Finland"
     }
 }

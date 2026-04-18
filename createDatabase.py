@@ -15,45 +15,14 @@ import warnings
 warnings.simplefilter(action='ignore', category=pandas.errors.PerformanceWarning)
 
 from nhlpy import NHLClient
-from manualDataEntry import NHLTeamData, NHLPlayerData
+from manualDataEntry import NHLTeamData
+from helperFunctions import formatCityName
 
 # MoneyPuck has inconsistent team names. Transform all to follow NHL API convention.
 moneyPuckDecoder = {"L.A": "LAK",
                     "N.J": "NJD",
                     "T.B": "TBL",
                     "S.J": "SJS"}
-
-def formatCityName(player):
-    """
-    Format the birth city of a player from NHL API dictionary to a good format
-    TODO: synchronize this function with the one in createCityLocationFile
-    
-    Argument:
-        player = Player dictionary read from NHL API
-        
-    Return:
-        Formatted birth city
-    """
-            
-    city = ""
-    state = ""
-    if "birthStateProvince" in player:
-        state = ", {}".format(player["birthStateProvince"]["default"])
-        
-    # There are players who are missing birth city
-    # These cases have been fixed by manually entering the missing data
-    if "birthCity" in player:
-        city = player["birthCity"]["default"] + state
-    else:
-        data_provider = NHLPlayerData()
-        city = data_provider.get_birth_city(player["id"])
-        state = data_provider.get_birth_state(player["id"])
-        
-        if state != "":
-            state = ", {}".format(state)
-            city = city + state
-    
-    return city
 
 def getAccentedName(player, nameString):
     """ 
@@ -147,7 +116,7 @@ def fillPlayers(connection, cursor, nhl_client):
                     # Gather the player information
                     first_name = getAccentedName(player, "firstName")
                     last_name = getAccentedName(player, "lastName")
-                    birth_city = formatCityName(player)
+                    birth_city, _, _ = formatCityName(player)
                     birth_date = player.get("birthDate", "NULL")
                     position = player.get("positionCode", "NULL")
                     handedness = player.get("shootsCatches", "NULL")
@@ -202,7 +171,23 @@ def fillTeams(connection, cursor, nhl_client):
     # Once all commands have been execute to the cursor, save them to database by committing them
     connection.commit()
         
-   
+ 
+def add_quotes(input_string):
+    """ 
+    Function for adding quotes around a string. Do not do this for "NULL" string
+
+    Arguments:
+        input_string = String needing quotes
+
+    Return:
+        input_string enclosed in quotes, unless the input_string is "NULL"
+    """
+    
+    if input_string == "NULL":
+        return input_string
+    
+    return "\"" + input_string + "\""
+ 
 def fillCities(connection, cursor, cityFileName):
     """ 
     Function for filling the cities table in the database
@@ -222,16 +207,16 @@ def fillCities(connection, cursor, cityFileName):
             # Add all the VALUES for the INSERT command for all cities
             for cityCode in cityLocations:
             
-                name_local = cityLocations[cityCode]["nameLocal"]
-                name_english = cityLocations[cityCode]["nameEnglish"]
-                country = cityLocations[cityCode].get("country","NULL")
-                state = cityLocations[cityCode].get("state","NULL")
-                state_code = cityLocations[cityCode].get("state_code","NULL")
+                name_local = add_quotes(cityLocations[cityCode]["nameLocal"])
+                name_english = add_quotes(cityLocations[cityCode]["nameEnglish"])
+                country = add_quotes(cityLocations[cityCode].get("country","NULL"))
+                state = add_quotes(cityLocations[cityCode].get("state","NULL"))
+                state_code = add_quotes(cityLocations[cityCode].get("state_code","NULL"))
                 latitude = cityLocations[cityCode]["coordinates"][0]
                 longitude = cityLocations[cityCode]["coordinates"][1]
         
                 # Write the INSERT command for SQL
-                sql_command = """INSERT INTO cities (name_NHL_API, name_local, name_english, country, state, state_code, latitude, longitude) VALUES (\"{}\", \"{}\", \"{}\", \"{}\", \"{}\", \"{}\", {}, {});""".format(cityCode, name_local, name_english, country, state, state_code, latitude, longitude)
+                sql_command = f"""INSERT INTO cities (name_NHL_API, name_local, name_english, country, state, state_code, latitude, longitude) VALUES (\"{cityCode}\", {name_local}, {name_english}, {country}, {state}, {state_code}, {latitude}, {longitude});"""
             
                 # Once the command has been compiled, we can execute it
                 cursor.execute(sql_command)
@@ -244,16 +229,20 @@ def fillCities(connection, cursor, cityFileName):
         print("Could not open the file {}. Will not initialize the cities table.".format(cityFileName))
  
  
-def fillTeamStats(connection):
+def fillMoneyPuckSeasonStats(connection, rename_column, drop_column, input_tag, output_table):
     """ 
-    Function for filling the team statistics for all seasons since 2008
+    Function for filling the MoneyPuck statistics for all seasons since 2008
 
     Arguments:
         connection = Connection object to SQLite database
+        rename_column = Dictionary of column names to be renames
+        drop_column = List of columns names to be dropped from table before writing to SQL database
+        input_tag = Tag identifying the input file
+        output_table = Table name in the database to which stats are written
     """
     
     # First collect all data to memory:
-    all_team_data = []
+    all_data = []
     
     # Loop over all the seasons we want to include in the database
     for season in range(2025, 2007, -1):
@@ -265,29 +254,46 @@ def fillTeamStats(connection):
                 continue
         
             # Regular season or playoffs stats for the teams
-            teamStats = pandas.read_csv("moneyPuck/teams_{}_{}.csv".format(season, phase))
+            moneyPuck_stats = pandas.read_csv("moneyPuck/{}_{}_{}.csv".format(input_tag, season, phase))
         
             # Assign a new column for phase of season
-            teamStats = teamStats.assign(phase=phase)
+            moneyPuck_stats = moneyPuck_stats.assign(phase=phase)
             
             # Rename some columns to make them consistent between tables
             # We need to do this at this point as some columns are inconsistent between years
-            teamStats.rename(columns={"iceTime": "icetime", "penalityMinutesFor": "penaltyMinutesFor", "penalityMinutesAgainst": "penaltyMinutesAgainst", "penalitiesFor": "penaltiesFor", "penalitiesAgainst": "penaltiesAgainst"}, inplace=True)
+            moneyPuck_stats.rename(columns=rename_column, inplace=True)
             
             # Collect the stats to all_team_data list
-            all_team_data.append(teamStats)
+            all_data.append(moneyPuck_stats)
             
     # Combine all data into a single dataframe
-    team_data_for_sql = pandas.concat(all_team_data, ignore_index=True)
+    data_for_sql = pandas.concat(all_data, ignore_index=True)
     
     # Decode team names
-    team_data_for_sql["team"] = team_data_for_sql["team"].replace(moneyPuckDecoder)
+    data_for_sql["team"] = data_for_sql["team"].replace(moneyPuckDecoder)
     
     # Drop unwanted columns from the combined dataframe to get better performance
-    team_data_for_sql.drop(columns=["name", "team.1", "position"], inplace=True)
+    data_for_sql.drop(columns=drop_column, inplace=True)
         
     # Write the combined dataframe to the database
-    team_data_for_sql.to_sql(name="team_season_stats", con=connection, index=False, if_exists="append")
+    data_for_sql.to_sql(name=output_table, con=connection, index=False, if_exists="append") 
+ 
+def fillTeamStats(connection):
+    """ 
+    Function for filling the team statistics for all seasons since 2008
+
+    Arguments:
+        connection = Connection object to SQLite database
+    """
+    
+    # Collect the team specific information
+    rename_column = {"iceTime": "icetime", "penalityMinutesFor": "penaltyMinutesFor", "penalityMinutesAgainst": "penaltyMinutesAgainst", "penalitiesFor": "penaltiesFor", "penalitiesAgainst": "penaltiesAgainst"}
+    drop_column = ["name", "team.1", "position"]
+    input_tag = "teams"
+    output_table = "team_season_stats"
+    
+    # Fill MoneyPuck stats with the defined information
+    fillMoneyPuckSeasonStats(connection, rename_column, drop_column, input_tag, output_table)
  
 def fillGoalieStats(connection):
     """ 
@@ -297,41 +303,15 @@ def fillGoalieStats(connection):
         connection = Connection object to SQLite database
     """
     
-    # First collect all data to memory:
-    all_goalie_data = []
+    # Collect the goalie specific information
+    rename_column = {"penalityMinutes": "penaltyMinutes"}
+    drop_column = ["name", "position"]
+    input_tag = "goalies"
+    output_table = "goalie_season_stats"
     
-    # Loop over all the seasons we want to include in the database
-    for season in range(2025, 2007, -1):
+    # Fill MoneyPuck stats with the defined information
+    fillMoneyPuckSeasonStats(connection, rename_column, drop_column, input_tag, output_table)
     
-        for phase in ["regular", "playoffs"]:
-        
-            # There is no playoff data yet for 2025 season
-            if season == 2025 and phase == "playoffs":
-                continue
-        
-            # Regular season or playoffs stats for the teams
-            goalieStats = pandas.read_csv("moneyPuck/goalies_{}_{}.csv".format(season, phase))
-            
-            # Add column to distinguish regular season and playoffs
-            goalieStats = goalieStats.assign(phase=phase)
-            
-            # Collect the season stats into a list
-            all_goalie_data.append(goalieStats)
-            
-    # Combine all data into a single dataframe
-    goalie_data_for_sql = pandas.concat(all_goalie_data, ignore_index=True)
-    
-    # Decode team names
-    goalie_data_for_sql["team"] = goalie_data_for_sql["team"].replace(moneyPuckDecoder)
-    
-    # Rename some columns to make them consistent between tables
-    goalie_data_for_sql.rename(columns={"penalityMinutes": "penaltyMinutes"}, inplace=True)
-    
-    # Drop unwanted columns from the combined dataframe to get better performance
-    goalie_data_for_sql.drop(columns=["name", "position"], inplace=True)
-        
-    # Write the combined dataframe to the database
-    goalie_data_for_sql.to_sql(name="goalie_season_stats", con=connection, index=False, if_exists="append")
             
 def fillSkaterStats(connection):
     """ 
@@ -341,41 +321,15 @@ def fillSkaterStats(connection):
         connection = Connection object to SQLite database
     """
     
-    # First collect all data to memory:
-    all_skater_data = []
+    # Collect the skater specific information
+    rename_column = {"penalityMinutes": "penaltyMinutes", "penalityMinutesDrawn": "penaltyMinutesDrawn"}
+    drop_column = ["name", "position", "I_F_shifts", "I_F_penalityMinutes", "I_F_faceOffsWon"]
+    input_tag = "skaters"
+    output_table = "skater_season_stats"
     
-    # Loop over all the seasons we want to include in the database
-    for season in range(2025, 2007, -1):
+    # Fill MoneyPuck stats with the defined information
+    fillMoneyPuckSeasonStats(connection, rename_column, drop_column, input_tag, output_table)
     
-        for phase in ["regular", "playoffs"]:
-        
-            # There is no playoff data yet for 2025 season
-            if season == 2025 and phase == "playoffs":
-                continue
-        
-            # Regular season or playoffs stats for the teams
-            skaterStats = pandas.read_csv("moneyPuck/skaters_{}_{}.csv".format(season, phase))
-            
-            # Add column to distinguish regular season and playoffs
-            skaterStats = skaterStats.assign(phase=phase)
-            
-            # Collect the season stats into a list
-            all_skater_data.append(skaterStats)
-       
-    # Combine all data into a single dataframe
-    skater_data_for_sql = pandas.concat(all_skater_data, ignore_index=True)
-    
-    # Decode team names
-    skater_data_for_sql["team"] = skater_data_for_sql["team"].replace(moneyPuckDecoder)  
-       
-    # Remove the columns from the dataframe that we do not want to store
-    skater_data_for_sql.drop(columns=["name", "position", "I_F_shifts", "I_F_penalityMinutes", "I_F_faceOffsWon"], inplace=True)
-            
-    # Rename some columns to make them consistent between tables
-    skater_data_for_sql.rename(columns={"penalityMinutes": "penaltyMinutes", "penalityMinutesDrawn": "penaltyMinutesDrawn"}, inplace=True)
-        
-    # Write the dataframe to the database
-    skater_data_for_sql.to_sql(name="skater_season_stats", con=connection, index=False, if_exists="append")
      
 def main():
     """

@@ -4,6 +4,7 @@
 import sys
 import pandas as pd
 import sqlite3
+import plotly.graph_objects as go
     
 def scatterWithPlotly(goalieData, xAxis, yAxis, diagonalLine = False, minGamesPlayed = 20):
     """
@@ -16,8 +17,6 @@ def scatterWithPlotly(goalieData, xAxis, yAxis, diagonalLine = False, minGamesPl
         diagonalLine = Draw a diagonal line to the plot. Default = False
         minGamesPlayed = Minimum number of games played to be included in the plot. Default = 20
     """
-
-    import plotly.graph_objects as go
 
     # Use the filter for minimum number of games played
     filteredGoalies = goalieData[goalieData["games_played"] >= minGamesPlayed]
@@ -80,9 +79,9 @@ def scatterWithPlotly(goalieData, xAxis, yAxis, diagonalLine = False, minGamesPl
     )
     
     # Add title as annotation in order to have same centering as the disclaimer
-    # TODO: text should not be hardcoded
+    season = goalieData.loc[0, "season"]
     fig.add_annotation(
-        text='NHL goalie performance for season 2025-2026',
+        text=f'NHL goalie performance for season {season}-{season+1}',
         xref='paper',
         yref='paper',
         x=0.5,
@@ -93,9 +92,10 @@ def scatterWithPlotly(goalieData, xAxis, yAxis, diagonalLine = False, minGamesPl
     )
     
     # Add a disclaimer telling the data source
-    # TODO: text should not be hardcoded
+    # TODO: In case the season in not fully over, there should be some info about when the data is obtained.
+    # TODO: This probably needs to be stored somewhere in the database
     fig.add_annotation(
-        text='Data for the figure is dowloaded from moneypuck.com on April 9, 2026. All goalies with at least {} played games are included.'.format(minGamesPlayed),
+        text='Data for the figure is dowloaded from moneypuck.com. All goalies with at least {} played games are included.'.format(minGamesPlayed),
         xref='paper',
         yref='paper',
         x=0.5,

@@ -19,10 +19,6 @@ def mapTeams(mappedTeamsAndSeasons):
     mapPoints = {}
     for team, season in mappedTeamsAndSeasons:
     
-        # TODO: If we query multiple teams and same player is in both of them
-        # TODO: (for example we want to plot same team from multiple seasons)
-        # TODO: the same player will show multiple times! Need to build protection
-        # TODO: against this!
         sql_query = "SELECT player_first_name AS first_name, player_last_name AS last_name, \
                              city_name_english AS city_name, city_state_code AS state_code, \
                              city_latitude AS latitude, city_longitude AS longitude  \
@@ -37,9 +33,8 @@ def mapTeams(mappedTeamsAndSeasons):
             city = player.city_name
             state = player.state_code
             
-            # TODO: If not state, currently a string "NULL" is inserted instead of NULL value!
             # Check if the state is NULL in the database
-            if state == "NULL":
+            if pd.isna(state):
                 # If there is no state information, use city directly as city key
                 cityKey = city
             else:
@@ -52,8 +47,9 @@ def mapTeams(mappedTeamsAndSeasons):
             # If the city with unique key is already on the map points, add to existing description
             # If it is not in the map points, create a new entry to map points
             if cityKey in mapPoints:
-                # Adding to existing map point
-                mapPoints[cityKey]["players"].append(playerName)
+                # Adding to existing map point if the player is not already there
+                if playerName not in mapPoints[cityKey]["players"]:
+                    mapPoints[cityKey]["players"].append(playerName)
             else:
                 # Creating a new map point
                 cityPoint = {}
