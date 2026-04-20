@@ -3,39 +3,180 @@
 import country_converter as coco
 from manualDataEntry import NHLPlayerData
 
-def formatCityName(player):
-    """
-    Format the birth city of a player from NHL API dictionary to a good format
+class cityFormatter():
+
+    def __init__(self):
+        
+        # Dictionary to format US states and Canadian provinces into two letter abbreviations
+        self.states = {
+            # US States
+            "Alabama": "AL",
+            "Alaska": "AK",
+            "Arizona": "AZ",
+            "Arkansas": "AR",
+            "California": "CA",
+            "Colorado": "CO",
+            "Connecticut": "CT",
+            "Delaware": "DE",
+            "Florida": "FL",
+            "Georgia": "GA",
+            "Hawaii": "HI",
+            "Hawa'ii": "HI",
+            "Idaho": "ID",
+            "Illinois": "IL",
+            "Indiana": "IN",
+            "Iowa": "IA",
+            "Kansas": "KS",
+            "Kentucky": "KY",
+            "Louisiana": "LA",
+            "Maine": "ME",
+            "Maryland": "MD",
+            "Massachusetts": "MA",
+            "Michigan": "MI",
+            "Minnesota": "MN",
+            "Mississippi": "MS",
+            "Missouri": "MO",
+            "Montana": "MT",
+            "Nebraska": "NE",
+            "Nevada": "NV",
+            "New Hampshire": "NH",
+            "New Jersey": "NJ",
+            "New Mexico": "NM",
+            "New York": "NY",
+            "North Carolina": "NC",
+            "North Dakota": "ND",
+            "Ohio": "OH",
+            "Oklahoma": "OK",
+            "Oregon": "OR",
+            "Pennsylvania": "PA",
+            "Rhode Island": "RI",
+            "South Carolina": "SC",
+            "South Dakota": "SD",
+            "Tennessee": "TN",
+            "Texas": "TX",
+            "Utah": "UT",
+            "Vermont": "VT",
+            "Virginia": "VA",
+            "Washington": "WA",
+            "West Virginia": "WV",
+            "Wisconsin": "WI",
+            "Wyoming": "WY",
+            # Canadian Provinces and Territories
+            "Alberta": "AB",
+            "British Columbia": "BC",
+            "Manitoba": "MB",
+            "New Brunswick": "NB",
+            "Newfoundland and Labrador": "NL",
+            "Nova Scotia": "NS",
+            "Ontario": "ON",
+            "Prince Edward Island": "PE",
+            "Quebec": "QC",
+            "Québec": "QC",
+            "Saskatchewan": "SK",
+            "Northwest Territories": "NT",
+            "Nunavut": "NU",
+            "Yukon": "YT"
+        }
+
+    def formatCityName(self, player):
+        """
+        Format the birth city of a player from NHL API dictionary to a good format
     
-    Argument:
-        player: Player dictionary read from NHL API
+        Argument:
+            player: Player dictionary read from NHL API
+        
+        Return:
+            Birth city, state, and country for the player
+        """
+            
+        city = ""
+        state = ""
+        if "birthStateProvince" in player:
+            plain_state = self.states.get(player["birthStateProvince"]["default"], player["birthStateProvince"]["default"])
+            state = ", {}".format(plain_state)
+        
+        # There are players who are missing birth city
+        # These cases have been fixed by manually entering the missing data
+        if "birthCity" in player:
+            city = player["birthCity"]["default"] + state
+            countryCode = player["birthCountry"]
+        else:
+            data_provider = NHLPlayerData()
+            city = data_provider.get_birth_city(player["id"])
+            state = data_provider.get_birth_state(player["id"])
+            countryCode = data_provider.get_birth_country(player["id"])
+        
+            if state != "":
+                state = ", {}".format(state)
+                city = city + state
+    
+        # Transform the country code to full country name to be used in geolocation
+        # Comma is there so separate country from the name for the geolocator
+        country = ", " + coco.convert(names=countryCode, to="name_short")
+    
+        return city, state[2:], country
+
+def getAccentedName(player, nameString):
+    """ 
+    Function for getting player name using local spelling if possible
+
+    Arguments:
+        player = Dictionary containing player data from NHL API
+        nameString = Can be either firstname or lastname
         
     Return:
-        Birth city, state, and country for the player
+        Properly accented player name
     """
+    
+    # If there are no alternative formats for the name, return default format
+    if len(player[nameString]) == 1:
+        return player[nameString]["default"]
+        
+    # If there are other formats, try to find the local language
+    if player["birthCountry"] == "FIN":
+        if "fi" in player[nameString]:
+            return player[nameString]["fi"]
             
-    city = ""
-    state = ""
-    if "birthStateProvince" in player:
-        state = ", {}".format(player["birthStateProvince"]["default"])
+    if player["birthCountry"] == "SWE" or player["birthCountry"] == "DNK" or player["birthCountry"] == "NOR":
+        if "sv" in player[nameString]:
+            return player[nameString]["sv"]
+            
+    if player["birthCountry"] == "CZE" or player["birthCountry"] == "SVK":
+        if "cs" in player[nameString]:
+            return player[nameString]["cs"]
+            
+    if player["birthCountry"] == "DEU" or player["birthCountry"] == "CHE":
+        if "de" in player[nameString]:
+            return player[nameString]["de"]
+            
+    if player["birthCountry"] == "AUT":
+        if "de" in player[nameString]:
+            return player[nameString]["de"]
+        if "cs" in player[nameString]:
+            return player[nameString]["cs"]
+            
+    # There are a lot of Canadian players that might have French pronunciation for their name
+    # This might be valid also for French and Swiss players, so do not have country specific argument
+    if "fr" in player[nameString]:
+        return player[nameString]["fr"]
+            
         
-    # There are players who are missing birth city
-    # These cases have been fixed by manually entering the missing data
-    if "birthCity" in player:
-        city = player["birthCity"]["default"] + state
-        countryCode = player["birthCountry"]
-    else:
-        data_provider = NHLPlayerData()
-        city = data_provider.get_birth_city(player["id"])
-        state = data_provider.get_birth_state(player["id"])
-        countryCode = data_provider.get_birth_country(player["id"])
-        
-        if state != "":
-            state = ", {}".format(state)
-            city = city + state
+    # If we cannot find properly accented name, just use the default name
+    return player[nameString]["default"]
+
+
+def add_quotes(input_string):
+    """ 
+    Function for adding quotes around a string. Do not do this for "NULL" string
+
+    Arguments:
+        input_string = String needing quotes
+
+    Return:
+        input_string enclosed in quotes, unless the input_string is "NULL"
+    """
     
-    # Transform the country code to full country name to be used in geolocation
-    # Comma is there so separate country from the name for the geolocator
-    country = ", " + coco.convert(names=countryCode, to="name_short")
+    if input_string == "NULL":
+        return input_string
     
-    return city, state[2:], country
+    return "\"" + input_string + "\""

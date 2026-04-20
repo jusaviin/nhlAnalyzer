@@ -3,7 +3,7 @@
 from nhlpy import NHLClient
 from geopy.geocoders import Nominatim
 from manualDataEntry import NHLTeamData
-from helperFunctions import formatCityName
+from helperFunctions import cityFormatter
 import time
 import json
 
@@ -115,6 +115,9 @@ def main():
     
     # Once the home cities of the teams are gone through, go through all the players
 
+    # Create a city formatter class
+    cityHelper = cityFormatter()
+
     # Prepare the NHL client
     client = NHLClient()
 
@@ -147,7 +150,7 @@ def main():
                     #print(player)
             
                     # Get the city and state information in a nice format
-                    city, state, country = formatCityName(player)
+                    city, state, country = cityHelper.formatCityName(player)
         
                     # If the city is not already in the cityLocations dictionary, find its coordinates
                     # and add it to the dictionary

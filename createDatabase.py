@@ -16,61 +16,13 @@ warnings.simplefilter(action='ignore', category=pandas.errors.PerformanceWarning
 
 from nhlpy import NHLClient
 from manualDataEntry import NHLTeamData
-from helperFunctions import formatCityName
+from helperFunctions import cityFormatter, getAccentedName, add_quotes
 
 # MoneyPuck has inconsistent team names. Transform all to follow NHL API convention.
 moneyPuckDecoder = {"L.A": "LAK",
                     "N.J": "NJD",
                     "T.B": "TBL",
                     "S.J": "SJS"}
-
-def getAccentedName(player, nameString):
-    """ 
-    Function for getting player name using local spelling if possible
-
-    Arguments:
-        player = Dictionary containing player data from NHL API
-        nameString = Can be either firstname or lastname
-        
-    Return:
-        Properly accented player name
-    """
-    
-    # If there are no alternative formats for the name, return default format
-    if len(player[nameString]) == 1:
-        return player[nameString]["default"]
-        
-    # If there are other formats, try to find the local language
-    if player["birthCountry"] == "FIN":
-        if "fi" in player[nameString]:
-            return player[nameString]["fi"]
-            
-    if player["birthCountry"] == "SWE" or player["birthCountry"] == "DNK" or player["birthCountry"] == "NOR":
-        if "sv" in player[nameString]:
-            return player[nameString]["sv"]
-            
-    if player["birthCountry"] == "CZE" or player["birthCountry"] == "SVK":
-        if "cs" in player[nameString]:
-            return player[nameString]["cs"]
-            
-    if player["birthCountry"] == "DEU" or player["birthCountry"] == "CHE":
-        if "de" in player[nameString]:
-            return player[nameString]["de"]
-            
-    if player["birthCountry"] == "AUT":
-        if "de" in player[nameString]:
-            return player[nameString]["de"]
-        if "cs" in player[nameString]:
-            return player[nameString]["cs"]
-            
-    # There are a lot of Canadian players that might have French pronunciation for their name
-    # This might be valid also for French and Swiss players, so do not have country specific argument
-    if "fr" in player[nameString]:
-        return player[nameString]["fr"]
-            
-        
-    # If we cannot find properly accented name, just use the default name
-    return player[nameString]["default"]
     
 def fillPlayers(connection, cursor, nhl_client):
     """ 
@@ -88,6 +40,9 @@ def fillPlayers(connection, cursor, nhl_client):
     # We need to avoid adding same players multiple times
     # Remember the player ID of all the added players, and only add new players if ID not already in database
     added_players = []
+    
+    # Create a formatter class for city names
+    cityHelper = cityFormatter()
     
     # Loop over all the seasons we want to include in the database
     for season in range(2025, 2007, -1):
@@ -116,7 +71,7 @@ def fillPlayers(connection, cursor, nhl_client):
                     # Gather the player information
                     first_name = getAccentedName(player, "firstName")
                     last_name = getAccentedName(player, "lastName")
-                    birth_city, _, _ = formatCityName(player)
+                    birth_city, _, _ = cityHelper.formatCityName(player)
                     birth_date = player.get("birthDate", "NULL")
                     position = player.get("positionCode", "NULL")
                     handedness = player.get("shootsCatches", "NULL")
@@ -170,23 +125,7 @@ def fillTeams(connection, cursor, nhl_client):
                 
     # Once all commands have been execute to the cursor, save them to database by committing them
     connection.commit()
-        
- 
-def add_quotes(input_string):
-    """ 
-    Function for adding quotes around a string. Do not do this for "NULL" string
-
-    Arguments:
-        input_string = String needing quotes
-
-    Return:
-        input_string enclosed in quotes, unless the input_string is "NULL"
-    """
     
-    if input_string == "NULL":
-        return input_string
-    
-    return "\"" + input_string + "\""
  
 def fillCities(connection, cursor, cityFileName):
     """ 
@@ -202,7 +141,7 @@ def fillCities(connection, cursor, cityFileName):
     try:
         with open(cityFileName, "r", encoding='utf-8') as f:
             cityLocations = json.load(f)
-            print("Filled the cities table from file {}.".format(cityFileName))
+            print("Filling the cities table from file {}.".format(cityFileName))
         
             # Add all the VALUES for the INSERT command for all cities
             for cityCode in cityLocations:
@@ -215,8 +154,12 @@ def fillCities(connection, cursor, cityFileName):
                 latitude = cityLocations[cityCode]["coordinates"][0]
                 longitude = cityLocations[cityCode]["coordinates"][1]
         
-                # Write the INSERT command for SQL
-                sql_command = f"""INSERT INTO cities (name_NHL_API, name_local, name_english, country, state, state_code, latitude, longitude) VALUES (\"{cityCode}\", {name_local}, {name_english}, {country}, {state}, {state_code}, {latitude}, {longitude});"""
+                # INSERT new values and UPDATE existing values
+                sql_command = f"""INSERT INTO cities (name_NHL_API, name_local, name_english, country, state, state_code, latitude, longitude) VALUES (\"{cityCode}\", {name_local}, {name_english}, {country}, {state}, {state_code}, {latitude}, {longitude})
+                    ON CONFLICT(name_NHL_API) DO UPDATE SET
+                    name_local = excluded.name_local, name_english = excluded.name_english,
+                    country = excluded.country, state = excluded.state, state_code = excluded.state_code,
+                    latitude = excluded.latitude, longitude = excluded.longitude;"""
             
                 # Once the command has been compiled, we can execute it
                 cursor.execute(sql_command)
@@ -226,7 +169,7 @@ def fillCities(connection, cursor, cityFileName):
         
         
     except FileNotFoundError:
-        print("Could not open the file {}. Will not initialize the cities table.".format(cityFileName))
+        print("Could not open the file {}. Will not fill the cities table.".format(cityFileName))
  
  
 def fillMoneyPuckSeasonStats(connection, rename_column, drop_column, input_tag, output_table):

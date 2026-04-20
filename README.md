@@ -79,7 +79,17 @@ python3 createDatabase.py
 python3 createViews.py
 ```
 
-Notice that building the players table from NHL API takes about 10 minutes, since the code sleeps 1 second after every API call in order to be polite and not to overwhelm the servers. After running these commands, you have the database with summary level statistics available!
+Notice that building the players table from NHL API takes about 10 minutes, since the code sleeps 1 second after every API call in order to be polite and not to overwhelm the servers. After running these commands, the next step is to fill in the gaps between NHL API team rosters and MoneyPuck stats tables.
+
+## Update database with players not included in NHL API team summaries
+
+I am not 100% sure how NHL API decides which players are in the team season roster. It seems like if there is a mostly AHL player who only plays a few games during the season, they do not make it to the roster in API. However, they will have stats recorded, and thus are included in MoneyPuck files. In these cases, we can use different NHL API call to fill basic player information to the SQL database. You can conveniently do this all in one go with the command
+
+```
+python3 fillPlayerGaps.py
+```
+
+Notice that there can also be players that are included in the NHL API team rosters, but have not actually played any games. In these cases there are no stats information for these players. However, since they have not played games, this is expected behavior and does not need to be protected against. Now you have the database with summary level statistics from NHL players available!
 
 ## Play with the database or try basin visualizations
 

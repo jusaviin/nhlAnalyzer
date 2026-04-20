@@ -13911,5 +13911,368 @@
         "nameLocal": "Valkeakoski",
         "nameEnglish": "Valkeakoski",
         "country": "Finland"
+    },
+    "Fort St. John, BC": {
+        "coordinates": [
+            56.2527571,
+            -120.8472064
+        ],
+        "nameLocal": "Fort St. John",
+        "nameEnglish": "Fort St. John",
+        "country": "Canada",
+        "state": "British Columbia",
+        "state_code": "BC"
+    },
+    "St. Adolphe, MB": {
+        "coordinates": [
+            49.677499,
+            -97.11228
+        ],
+        "nameLocal": "St. Adolphe",
+        "nameEnglish": "St. Adolphe",
+        "country": "Canada",
+        "state": "Manitoba",
+        "state_code": "MB"
+    },
+    "North Barrington, IL": {
+        "coordinates": [
+            42.207802,
+            -88.1406349
+        ],
+        "nameLocal": "North Barrington",
+        "nameEnglish": "North Barrington",
+        "country": "United States",
+        "state": "Illinois",
+        "state_code": "IL"
+    },
+    "Strongsville, OH": {
+        "coordinates": [
+            41.3144733,
+            -81.83511
+        ],
+        "nameLocal": "Strongsville",
+        "nameEnglish": "Strongsville",
+        "country": "United States",
+        "state": "Ohio",
+        "state_code": "OH"
+    },
+    "Agryz": {
+        "coordinates": [
+            56.525516,
+            52.9971643
+        ],
+        "nameLocal": "Агрыз",
+        "nameEnglish": "Agryz",
+        "country": "Russia"
+    },
+    "Glencoe, IL": {
+        "coordinates": [
+            42.1350268,
+            -87.7581188
+        ],
+        "nameLocal": "Glencoe",
+        "nameEnglish": "Glencoe",
+        "country": "United States",
+        "state": "Illinois",
+        "state_code": "IL"
+    },
+    "Glen Mills, PA": {
+        "coordinates": [
+            39.919698,
+            -75.4904323
+        ],
+        "nameLocal": "Glen Mills",
+        "nameEnglish": "Glen Mills",
+        "country": "United States",
+        "state": "Pennsylvania",
+        "state_code": "PA"
+    },
+    "Andover, MA": {
+        "coordinates": [
+            42.65717,
+            -71.1408776
+        ],
+        "nameLocal": "Andover",
+        "nameEnglish": "Andover",
+        "country": "United States",
+        "state": "Massachusetts",
+        "state_code": "MA"
+    },
+    "Saint-Georges-De-Beauce, QC": {
+        "coordinates": [
+            46.122987,
+            -70.671959
+        ],
+        "nameLocal": "Saint-Georges",
+        "nameEnglish": "Saint-Georges",
+        "country": "Canada",
+        "state": "Quebec",
+        "state_code": "QC"
+    },
+    "River Falls, WI": {
+        "coordinates": [
+            44.8596498,
+            -92.6255048
+        ],
+        "nameLocal": "River Falls",
+        "nameEnglish": "River Falls",
+        "country": "United States",
+        "state": "Wisconsin",
+        "state_code": "WI"
+    },
+    "South Lyon, MI": {
+        "coordinates": [
+            42.451377,
+            -83.659179
+        ],
+        "nameLocal": "South Lyon",
+        "nameEnglish": "South Lyon",
+        "country": "United States",
+        "state": "Michigan",
+        "state_code": "MI"
+    },
+    "Holt, MI": {
+        "coordinates": [
+            42.6414805,
+            -84.5201719
+        ],
+        "nameLocal": "Holt",
+        "nameEnglish": "Holt",
+        "country": "United States",
+        "state": "Michigan",
+        "state_code": "MI"
+    },
+    "Corona, CA": {
+        "coordinates": [
+            33.8752945,
+            -117.566444
+        ],
+        "nameLocal": "Corona",
+        "nameEnglish": "Corona",
+        "country": "United States",
+        "state": "California",
+        "state_code": "CA"
+    },
+    "Thornwood, NY": {
+        "coordinates": [
+            41.1187775,
+            -73.7770788
+        ],
+        "nameLocal": "Thornwood",
+        "nameEnglish": "Thornwood",
+        "country": "United States",
+        "state": "New York",
+        "state_code": "NY"
+    },
+    "Trondheim": {
+        "coordinates": [
+            63.4304475,
+            10.3952118
+        ],
+        "nameLocal": "Trondheim",
+        "nameEnglish": "Trondheim",
+        "country": "Norway"
+    },
+    "Laurel Hollow, NY": {
+        "coordinates": [
+            40.8567653,
+            -73.4695665
+        ],
+        "nameLocal": "Laurel Hollow",
+        "nameEnglish": "Laurel Hollow",
+        "country": "United States",
+        "state": "New York",
+        "state_code": "NY"
+    },
+    "Voronezh": {
+        "coordinates": [
+            51.6800081,
+            39.183725
+        ],
+        "nameLocal": "Воронеж",
+        "nameEnglish": "Voronezh",
+        "country": "Russia"
+    },
+    "Ylojarvi": {
+        "coordinates": [
+            61.5488965,
+            23.5951425
+        ],
+        "nameLocal": "Ylöjärvi",
+        "nameEnglish": "Ylöjärvi",
+        "country": "Finland"
+    },
+    "Lafayette, CO": {
+        "coordinates": [
+            39.9935959,
+            -105.089705
+        ],
+        "nameLocal": "Lafayette",
+        "nameEnglish": "Lafayette",
+        "country": "United States",
+        "state": "Colorado",
+        "state_code": "CO"
+    },
+    "Hermantown, MN": {
+        "coordinates": [
+            46.8068852,
+            -92.2382464
+        ],
+        "nameLocal": "Hermantown",
+        "nameEnglish": "Hermantown",
+        "country": "United States",
+        "state": "Minnesota",
+        "state_code": "MN"
+    },
+    "Pembroke, ON": {
+        "coordinates": [
+            45.8209741,
+            -77.1115433
+        ],
+        "nameLocal": "Pembroke",
+        "nameEnglish": "Pembroke",
+        "country": "Canada",
+        "state": "Ontario",
+        "state_code": "ON"
+    },
+    "Orenburg": {
+        "coordinates": [
+            51.7671248,
+            55.0978517
+        ],
+        "nameLocal": "Оренбург",
+        "nameEnglish": "Orenburg",
+        "country": "Russia"
+    },
+    "Hauho": {
+        "coordinates": [
+            61.1751591,
+            24.5649152
+        ],
+        "nameLocal": "Hauho",
+        "nameEnglish": "Hauho",
+        "country": "Finland"
+    },
+    "Red Bank, NJ": {
+        "coordinates": [
+            40.3470543,
+            -74.0643065
+        ],
+        "nameLocal": "Red Bank",
+        "nameEnglish": "Red Bank",
+        "country": "United States",
+        "state": "New Jersey",
+        "state_code": "NJ"
+    },
+    "Boulder, CO": {
+        "coordinates": [
+            40.0149856,
+            -105.270545
+        ],
+        "nameLocal": "Boulder",
+        "nameEnglish": "Boulder",
+        "country": "United States",
+        "state": "Colorado",
+        "state_code": "CO"
+    },
+    "Basking Ridge, NJ": {
+        "coordinates": [
+            40.7064088,
+            -74.5492725
+        ],
+        "nameLocal": "Basking Ridge",
+        "nameEnglish": "Basking Ridge",
+        "country": "United States",
+        "state": "New Jersey",
+        "state_code": "NJ"
+    },
+    "Cranford, NJ": {
+        "coordinates": [
+            40.656539,
+            -74.3035794
+        ],
+        "nameLocal": "Cranford",
+        "nameEnglish": "Cranford",
+        "country": "United States",
+        "state": "New Jersey",
+        "state_code": "NJ"
+    },
+    "Kage": {
+        "coordinates": [
+            64.8351736,
+            20.9848115
+        ],
+        "nameLocal": "Kåge",
+        "nameEnglish": "Kåge",
+        "country": "Sweden"
+    },
+    "Lyon": {
+        "coordinates": [
+            45.7578137,
+            4.8320114
+        ],
+        "nameLocal": "Lyon",
+        "nameEnglish": "Lyon",
+        "country": "France"
+    },
+    "Malacky": {
+        "coordinates": [
+            48.4362992,
+            17.0200447
+        ],
+        "nameLocal": "Malacky",
+        "nameEnglish": "Malacky",
+        "country": "Slovakia"
+    },
+    "Waconia, MN": {
+        "coordinates": [
+            44.8507957,
+            -93.7869088
+        ],
+        "nameLocal": "Waconia",
+        "nameEnglish": "Waconia",
+        "country": "United States",
+        "state": "Minnesota",
+        "state_code": "MN"
+    },
+    "Opole": {
+        "coordinates": [
+            50.6668184,
+            17.9236408
+        ],
+        "nameLocal": "Opole",
+        "nameEnglish": "Opole",
+        "country": "Poland"
+    },
+    "Cohasset, MN": {
+        "coordinates": [
+            47.263556,
+            -93.620215
+        ],
+        "nameLocal": "Cohasset",
+        "nameEnglish": "Cohasset",
+        "country": "United States",
+        "state": "Minnesota",
+        "state_code": "MN"
+    },
+    "Norwell, MA": {
+        "coordinates": [
+            42.1617681,
+            -70.7939307
+        ],
+        "nameLocal": "Norwell",
+        "nameEnglish": "Norwell",
+        "country": "United States",
+        "state": "Massachusetts",
+        "state_code": "MA"
+    },
+    "Uusikaarlepyy": {
+        "coordinates": [
+            63.5222473,
+            22.5284347
+        ],
+        "nameLocal": "Uusikaarlepyy",
+        "nameEnglish": "Uusikaarlepyy",
+        "country": "Finland"
     }
 }

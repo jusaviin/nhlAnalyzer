@@ -74,3 +74,4 @@ sed "${SEDARGS[@]}" "s# (BE)##" ${OUTPUTFILE}
 sed "${SEDARGS[@]}" "s# (Charlie Sinclair Memorial) Airport##" ${OUTPUTFILE}
 sed "${SEDARGS[@]}" "s#Kaltern an der Weinstraße - Caldaro sulla Strada del Vino#Caldaro#" ${OUTPUTFILE}
 sed "${SEDARGS[@]}" "s#Jakobstad#Pietarsaari#" ${OUTPUTFILE}
+sed "${SEDARGS[@]}" "s#Nykarleby#Uusikaarlepyy#" ${OUTPUTFILE}
