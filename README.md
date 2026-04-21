@@ -91,7 +91,7 @@ python3 fillPlayerGaps.py
 
 Notice that there can also be players that are included in the NHL API team rosters, but have not actually played any games. In these cases there are no stats information for these players. However, since they have not played games, this is expected behavior and does not need to be protected against. Now you have the database with summary level statistics from NHL players available!
 
-## Play with the database or try basin visualizations
+## Play with the database or try basic visualizations
 
 If you want to just play with the database, easiest thing to do is to open the sample Jupyter notebook
 
