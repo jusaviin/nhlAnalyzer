@@ -3,6 +3,7 @@
 import sqlite3
 import pandas as pd
 import folium
+from folium.plugins import MarkerCluster
 
 def save_map(map, save_name):
     """
@@ -18,21 +19,29 @@ def save_map(map, save_name):
     map.save(save_name)
     
 
-def mapTeamDictionary(map, team_dictionary):
+def mapTeamDictionary(map, team_dictionary, logo_size = 75, current_cluster = None):
     """
     Helper function to map all teams from a team dictionary
     
     Arguments:
         map = Folium map to which the teams are added
         team_dictionary = Dictionary containing the team information
+        logo_size = Size in pixels for the team logo. Measured in side of a square
+        current_cluster = If given, add teams to the cluster. If not, make a new cluster for teams
     """
+    
+    # Create a new cluster is an explicit cluster is not given
+    if current_cluster == None:
+        current_cluster = MarkerCluster().add_to(map)
+    
+    # Add all the teams to the cluster
     for team in team_dictionary:
         folium.Marker(
             location=team_dictionary[team]["coordinates"],
             popup=team_dictionary[team]["city"],
             tooltip=team_dictionary[team]["name"],
-            icon=folium.CustomIcon(icon_image=team_dictionary[team]["logo"], icon_size=[75,75])
-        ).add_to(map)
+            icon=folium.CustomIcon(icon_image=team_dictionary[team]["logo"], icon_size=[logo_size,logo_size])
+        ).add_to(current_cluster)
     
 
 def mapTeams(season, save_name = "teamTest.html"):
@@ -161,6 +170,9 @@ def mapRosters(mappedTeamsAndSeasons, save_name = "rosterTest.html"):
     # Start with the teams
     mapTeamDictionary(map, teamPoints)
     
+    # Make a cluster fpr players:
+    player_cluster = MarkerCluster().add_to(map)
+    
     # Then add the players
     for city in mapPoints:
             
@@ -175,7 +187,7 @@ def mapRosters(mappedTeamsAndSeasons, save_name = "rosterTest.html"):
             popup=city,
             tooltip=playerString,
             icon=folium.Icon(color="blue")
-        ).add_to(map)
+        ).add_to(player_cluster)
         
     # Save the map
     save_map(map, save_name)
