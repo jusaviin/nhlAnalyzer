@@ -8,6 +8,8 @@ DROP TABLE IF EXISTS cities;
 DROP TABLE IF EXISTS team_season_stats;
 DROP TABLE IF EXISTS skater_season_stats;
 DROP TABLE IF EXISTS goalie_season_stats;
+DROP TABLE IF EXISTS contracts;
+DROP TABLE IF EXISTS seasons;
 
 -- Table for cities for map visualizations
 CREATE TABLE cities
@@ -37,6 +39,29 @@ CREATE TABLE players
     height INTEGER,
     weight INTEGER,
     FOREIGN KEY (birth_city) REFERENCES cities(name_NHL_API)
+);
+
+-- Table for contracts
+CREATE TABLE contracts
+(
+    id INTEGER PRIMARY KEY NOT NULL,
+    player_id INTEGER NOT NULL,
+    type TEXT NOT NULL,
+    signing_date DATE,
+    start_season INTEGER,
+    end_season INTEGER,
+    total_value INTEGER,
+    cap_hit INTEGER,
+    FOREIGN KEY (player_id) REFERENCES players(id)
+);
+
+
+-- Table for seasons
+CREATE TABLE seasons
+(
+    season INTEGER PRIMARY KEY NOT NULL,
+    salary_cap INTEGER NOT NULL,
+    cap_floor INTEGER NOT NULL
 );
 
 -- Table for teams on NHL
@@ -167,7 +192,8 @@ CREATE TABLE team_season_stats
     totalShotCreditAgainst REAL,
     scoreAdjustedTotalShotCreditAgainst REAL,
     scoreFlurryAdjustedTotalShotCreditAgainst REAL,
-    FOREIGN KEY (team) REFERENCES teams(code)
+    FOREIGN KEY (team) REFERENCES teams(code),
+    FOREIGN KEY (season) REFERENCES seasons(season)
 );
 
 -- Statistics tables are filled directly from MoneyPuck csv files
@@ -327,7 +353,8 @@ CREATE TABLE skater_season_stats
     fenwickForAfterShifts REAL,
     fenwickAgainstAfterShifts REAL,
     FOREIGN KEY (playerId) REFERENCES players(id),
-    FOREIGN KEY (team) REFERENCES teams(code)
+    FOREIGN KEY (team) REFERENCES teams(code),
+    FOREIGN KEY (season) REFERENCES seasons(season)
 );
 
 -- TODO: Goalie stats are missing the number of wins. Need to get this from NHL API instead of MoneyPuck
@@ -370,5 +397,6 @@ CREATE TABLE goalie_season_stats
     penaltyMinutes INTEGER,
     penalties INTEGER,
     FOREIGN KEY (playerId) REFERENCES players(id),
-    FOREIGN KEY (team) REFERENCES teams(code)
+    FOREIGN KEY (team) REFERENCES teams(code),
+    FOREIGN KEY (season) REFERENCES seasons(season)
 );

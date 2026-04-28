@@ -28,6 +28,7 @@ pip install country_converter --upgrade
 pip install matplotlib
 pip install plotly
 pip install folium
+pip install dotenv
 ```
 
 ## Create a city location json file
@@ -90,6 +91,10 @@ python3 fillPlayerGaps.py
 ```
 
 Notice that there can also be players that are included in the NHL API team rosters, but have not actually played any games. In these cases there are no stats information for these players. However, since they have not played games, this is expected behavior and does not need to be protected against. Now you have the database with summary level statistics from NHL players available!
+
+## Add contract data to the database
+
+To be able to predict player contract values, you will need contract data. There is no way to obtain this without paying for access to private APIs that I know of. My personal choice here is to get this via [CapWages.com](https://capwages.com). To begin, you will need to make an account at their website and subscribe to a pro plan ($20/month at the time of writing this). After you subscribe, you can get an API key for your account settings. Create a new API key, and copy it locally to `.env` file a the `nhlAnalyzer` directory. Remember to add the `.env` file to `.gitignore` to not share your key with others! Once you have the API key set up, you can use `CapWagesReader` to obtain the player contracts and save them to the database. Notice that as per CapWages terms of service, you are only allowed to maintain their data in a personal database for the duration that you are subscribing to their service. So remember to delete any information from your databases that is obtained from their APi if you decide to unsubscribe.
 
 ## Play with the database or try basic visualizations
 

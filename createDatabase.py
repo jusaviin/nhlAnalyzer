@@ -8,6 +8,7 @@ import json
 import time
 import pandas
 import warnings
+import requests
 
 # The code gives performance warnings for the pandas dataframes.
 # The dataframe here is only used to transfer data from csv files to SQLite database.
@@ -15,15 +16,44 @@ import warnings
 warnings.simplefilter(action='ignore', category=pandas.errors.PerformanceWarning)
 
 from nhlpy import NHLClient
-from manualDataEntry import NHLTeamData
+from manualDataEntry import NHLTeamData, NHLSeasonData
 from helperFunctions import cityFormatter, getAccentedName, add_quotes
+from capWagesReader import CapWagesReader
 
 # MoneyPuck has inconsistent team names. Transform all to follow NHL API convention.
 moneyPuckDecoder = {"L.A": "LAK",
                     "N.J": "NJD",
                     "T.B": "TBL",
                     "S.J": "SJS"}
+
+def fillSeasons(connection, cursor):
+    """ 
+    Function for filling the season table in the database
+
+    Arguments:
+        connection = Connection object to SQLite database
+        cursor = cursor object to SQLite database
+    """
     
+    # Start by creating on object that finds manually collected season data
+    data_provider = NHLSeasonData()
+    
+    # Find all the seasons we have salary cap data about
+    all_seasons = data_provider.get_season_list()
+    
+    # Loop over all seasons and add information about them to the database
+    for season in all_seasons:
+        
+        sql_command = f"""INSERT INTO seasons (season, salary_cap, cap_floor) 
+                          VALUES ({season}, {data_provider.get_salary_cap(season)}, {data_provider.get_cap_floor(season)});"""
+                
+        # Once the command has been compiled, we can execute it
+        cursor.execute(sql_command)
+                
+    # Once all commands have been execute to the cursor, save them to database by committing them
+    connection.commit()
+    
+
 def fillPlayers(connection, cursor, nhl_client):
     """ 
     Function for filling the players table in the database
@@ -272,7 +302,103 @@ def fillSkaterStats(connection):
     
     # Fill MoneyPuck stats with the defined information
     fillMoneyPuckSeasonStats(connection, rename_column, drop_column, input_tag, output_table)
+  
+  
+def fillContracts(connection, cursor, cap_wages_reader):
+    """ 
+    Function contract information from CapWages API
+    In API version 1.1, the players are only accessible via their slugs
+    So we just loop over all slugs and fill all contracts we find from there
+
+    Arguments:
+        connection = Connection object to SQLite database
+        cursor = cursor object to SQLite database
+        cap_wages_reader = Reader connected to CapWages API to read team information
+    """
     
+    missed_slugs = []
+    
+    # Loop over all player slugs
+    for i, slug in enumerate(cap_wages_reader.slug_list):
+    
+        if i % 100 == 0:
+            print(f"Finding contracts for player {i}/{len(cap_wages_reader.slug_list)}")
+            
+        # DEBUG
+        #print("Finding info for slug {}".format(slug))
+    
+        # Find the player details from the slug
+        try:
+            player = cap_wages_reader.get_player_details(slug)
+        
+    
+            # Loop over all contracts the player has
+            for contract in player["data"]["contracts"]:
+
+                playerID = player["data"]["nhlId"]
+            
+                # There can be cases where nhlId is not included with the player
+                # We need to skip these as we cannot connect the contract to any player in this case
+                if playerID is None:
+                    continue
+                
+                # Convert playerID from string to int
+                playerID = int(playerID)
+            
+                # Collect the rest of the relevent information
+                type = contract["contractType"]
+                date = contract["signingDate"]
+    
+                min_season = int(contract["seasons"][0]["season"][:4])
+                max_season = int(contract["seasons"][0]["season"][:4])
+    
+                for season in contract["seasons"]:
+                    current_season = int(season["season"][:4])
+         
+                    if current_season < min_season:
+                        min_season = current_season
+             
+                    if current_season > max_season:
+                        max_season = current_season
+             
+                total_value = contract["contractValue"]
+                
+                # Cap Hit value can be none in some seasons. Try to find cap hit from any season in the contract
+                cap_hit = contract["seasons"][0]["capHit"]
+                i_season = 1
+                while cap_hit is None:
+                
+                    # None of the seasons has cap hit! Hopyfully this does not happen...
+                    if i_season == len(contract["seasons"]):
+                        break
+                    
+                    # See if the next season in the list has not None cap hit
+                    cap_hit = contract["seasons"][i_season]["capHit"]
+                    i_season = i_season + 1
+    
+                
+                # Once relevant contract information is gathered, compile the SQL command
+                sql_command = f"""INSERT INTO contracts (player_id, type, signing_date, start_season, end_season, total_value, cap_hit) VALUES ({playerID}, \"{type}\", \"{date}\", {min_season}, {max_season}, {total_value}, {cap_hit});"""
+                
+                # Once the command has been compiled, we can execute it
+                cursor.execute(sql_command)
+                
+        except requests.exceptions.HTTPError:
+            missed_slugs.append(slug)
+            
+            #DEBUG
+            print(f"{i} player {slug} not in API!")
+        
+        finally:
+            time.sleep(1) # Do not overwhelm CapWages API
+                    
+                
+    # Commit all changes to the database in the end
+    connection.commit()
+    
+    # DEBUG
+    print("Players not in API:")
+    print(missed_slugs)
      
 def main():
     """
@@ -289,9 +415,21 @@ def main():
     print("Connected to database {}".format(databaseName))
     
     # Initialize the tables
-    initializeTables = True
+    initializeTables = False
     if initializeTables:
-        initializationFile = "dataBaseSchema.sql"
+        initializationFile = "databaseSchema.sql"
+        with open(initializationFile, 'r') as sql_file:
+            sql_script = sql_file.read()
+
+        # Use a cursor for updating information and run the initialization script
+        cursor.executescript(sql_script)
+        print("Initialized the tables from file {}".format(initializationFile))
+        
+    # Development addition: initialize a subset of tables
+    # TODO: Remove after database schema is finalized
+    initializeDebugTables = False
+    if initializeDebugTables:
+        initializationFile = "databaseDebugSchema.sql"
         with open(initializationFile, 'r') as sql_file:
             sql_script = sql_file.read()
 
@@ -300,7 +438,7 @@ def main():
         print("Initialized the tables from file {}".format(initializationFile))
     
     # Fill information from NHL API
-    fillNHLAPI = True
+    fillNHLAPI = False
     if fillNHLAPI:
 
         # Fill the cities table
@@ -319,7 +457,7 @@ def main():
         print("Players table ready")
         
     # Fill information from MoneyPuck csv files
-    fillMoneyPuck = True
+    fillMoneyPuck = False
     if fillMoneyPuck:
         print("Filling stats from MoneyPuck")
     
@@ -327,9 +465,33 @@ def main():
         fillTeamStats(connection)
         fillGoalieStats(connection)
         fillSkaterStats(connection)
+        
+    # Fill contract information from CapWages API
+    fillCapWagesContracts = False
+    if fillCapWagesContracts:
+        
+        # Create a reader to access CapWages API
+        cap_wages_reader = CapWagesReader()
+        cap_wages_reader.set_dotenv_API_key("API_KEY")
+        
+        # Filling can be done in parts by adjusting values here
+        n_players_per_page = 100
+        first_page = 1
+        last_page = 70
+        cap_wages_reader.find_player_slugs(n_players_per_page, first_page, last_page)
+        
+        # Fill the contracts to the database
+        fillContracts(connection, cursor, cap_wages_reader)
+
+    # Fill season table with manually obtained information
+    fillSeasonTable = True
+    if fillSeasonTable:
+    
+        fillSeasons(connection, cursor)
 
     # Close the connection
     connection.close()
+        
 
 # Follow good coding practices
 if __name__ == "__main__":

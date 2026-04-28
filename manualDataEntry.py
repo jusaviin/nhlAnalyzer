@@ -119,3 +119,59 @@ class NHLPlayerData:
         Getter for birth state based on player_id
         """
         return self.data[player_id]["birthState"]
+
+class NHLSeasonData:
+    """
+    I have manually collected salary cap data for different seasons from Wikipedia
+    I am not sure if this is easily available in one place, but since there is
+    a limited amount of seasons, it is relatively quick to find this information
+    searching for season details and salary cap from Wikipedia. Salary cap URL:
+    https://en.wikipedia.org/wiki/NHL_salary_cap.
+    The seasons from 2026 and 2027 are from nhl.com
+    https://www.nhl.com/news/nhl-nhlpa-announce-team-payroll-ranges-for-next-3-seasons-through-2027-28
+    """
+    
+    def __init__(self):
+        self.data = {}
+        self.data[2005] = {"salary_cap": 39000000, "cap_floor": 23000000}
+        self.data[2006] = {"salary_cap": 44000000, "cap_floor": 28000000}
+        self.data[2007] = {"salary_cap": 50300000, "cap_floor": 34300000}
+        self.data[2008] = {"salary_cap": 56700000, "cap_floor": 40700000}
+        self.data[2009] = {"salary_cap": 56800000, "cap_floor": 40800000}
+        self.data[2010] = {"salary_cap": 59400000, "cap_floor": 43400000}
+        self.data[2011] = {"salary_cap": 64300000, "cap_floor": 48300000}
+        self.data[2012] = {"salary_cap": 70200000, "cap_floor": 54200000}
+        self.data[2013] = {"salary_cap": 64300000, "cap_floor": 48300000}
+        self.data[2014] = {"salary_cap": 69000000, "cap_floor": 51000000}
+        self.data[2015] = {"salary_cap": 71400000, "cap_floor": 52800000}
+        self.data[2016] = {"salary_cap": 73000000, "cap_floor": 54000000}
+        self.data[2017] = {"salary_cap": 75000000, "cap_floor": 55400000}
+        self.data[2018] = {"salary_cap": 79500000, "cap_floor": 58800000}
+        self.data[2019] = {"salary_cap": 81500000, "cap_floor": 60200000}
+        self.data[2020] = {"salary_cap": 81500000, "cap_floor": 60200000}
+        self.data[2021] = {"salary_cap": 81500000, "cap_floor": 60200000}
+        self.data[2022] = {"salary_cap": 82500000, "cap_floor": 61000000}
+        self.data[2023] = {"salary_cap": 83500000, "cap_floor": 61700000}
+        self.data[2024] = {"salary_cap": 88000000, "cap_floor": 65000000}
+        self.data[2025] = {"salary_cap": 95500000, "cap_floor": 70600000}
+        self.data[2026] = {"salary_cap": 104000000, "cap_floor": 76900000}
+        self.data[2027] = {"salary_cap": 113500000, "cap_floor": 83900000}
+        
+        
+    def get_salary_cap(self, season):
+        """
+        Getter for salary cap based on season
+        """
+        return self.data[season]["salary_cap"]
+        
+    def get_cap_floor(self, season):
+        """
+        Getter for salary floor based on season
+        """
+        return self.data[season]["cap_floor"]
+        
+    def get_season_list(self):
+        """
+        Get list of all seasons we have salary cap information about
+        """
+        return list(self.data.keys())

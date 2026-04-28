@@ -3,6 +3,9 @@ test
 moneyPuck/*.csv
 test*.*
 
+# Do not share my CapWages API key
+.env
+
 # Also the databases needed are created by the scripts, those do not need to be stored online
 *.db
 
@@ -27,3 +30,6 @@ __pycache__
 
 # Ignore the virtual environment, this should be created by the user
 nhlEnvironment
+
+# Ignore temporary development files
+slugfest.txt

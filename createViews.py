@@ -1,6 +1,4 @@
-# Create a SQLite database for the NHL and fill in some information
-# Notice that all previous tables from the database are wiped using this script
-# TODO: There should be some options on which information to fill
+# Create all the views that simplify obtaining information from the database
 
 # Required imports
 import sqlite3
