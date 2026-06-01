@@ -41,6 +41,14 @@ CREATE TABLE players
     FOREIGN KEY (birth_city) REFERENCES cities(name_NHL_API)
 );
 
+-- Table for seasons
+CREATE TABLE seasons
+(
+    season INTEGER PRIMARY KEY NOT NULL,
+    salary_cap INTEGER NOT NULL,
+    cap_floor INTEGER NOT NULL
+);
+
 -- Table for contracts
 CREATE TABLE contracts
 (
@@ -52,16 +60,9 @@ CREATE TABLE contracts
     end_season INTEGER,
     total_value INTEGER,
     cap_hit INTEGER,
-    FOREIGN KEY (player_id) REFERENCES players(id)
-);
-
-
--- Table for seasons
-CREATE TABLE seasons
-(
-    season INTEGER PRIMARY KEY NOT NULL,
-    salary_cap INTEGER NOT NULL,
-    cap_floor INTEGER NOT NULL
+    FOREIGN KEY (player_id) REFERENCES players(id),
+    FOREIGN KEY (start_season) REFERENCES seasons(season),
+    FOREIGN KEY (end_season) REFERENCES seasons(season)
 );
 
 -- Table for teams on NHL

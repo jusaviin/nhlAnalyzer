@@ -24,12 +24,19 @@ pip install nhl-api-py
 pip install geopy
 pip install jupyter
 pip install jupysql
-pip install country_converter --upgrade
+pip install country_converter
 pip install matplotlib
 pip install plotly
 pip install folium
 pip install dotenv
+pip install scikit-learn
+pip install seaborn
+pip install xgboost
+pip install tf-nightly
+pip install torch
 ```
+
+Notice that for TensorFlow the my recommendation is to install the development version from tf-nightly. This is because the production version of TensorFlow does not support the latest Python versions, but this support is there for the development version. Thus it is easier to keep using your up-to-date python and just trust that the nightly development build of TensorFlow works well for you.
 
 ## Create a city location json file
 
