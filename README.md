@@ -34,6 +34,7 @@ pip install seaborn
 pip install xgboost
 pip install tf-nightly
 pip install torch
+pip install optuna
 ```
 
 Notice that for TensorFlow the my recommendation is to install the development version from tf-nightly. This is because the production version of TensorFlow does not support the latest Python versions, but this support is there for the development version. Thus it is easier to keep using your up-to-date python and just trust that the nightly development build of TensorFlow works well for you.

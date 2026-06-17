@@ -31,6 +31,9 @@ __pycache__
 # Ignore the virtual environment, this should be created by the user
 nhlEnvironment
 
+# Do not add trained models to git. They are anyhow useless without the database
+models
+
 # Ignore temporary development files
 slugfest.txt
 colorNames.txt
