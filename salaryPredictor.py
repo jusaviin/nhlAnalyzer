@@ -13,6 +13,7 @@ import seaborn as sns
 import torch
 
 import pickle
+import json
 
 from pytorchPlayerNetwork import DeepPlayerNetwork
 from playerDataFunctions import obtain_stats_for_prediction
@@ -66,46 +67,82 @@ def main():
             - Store these predictions in the database
     """
     
-    # Define the paths for the loaded models
-    xgboost_pretrained_path = "models/xgboost_forward_salary_2026-06-17.json"
-    pytorch_pretrained_path = "models/pytorch_forward_salary_2026-06-17.pth"
-    scaler_pretained_path = "models/standard_scaler_for_pytorch_2026-06-17.pkl"
+    # Models are trained separately for forwards, defenders and goalies
+    positions = ["forward", "defender", "goalie"]
+    position_code = {"forward": ["C","R","L"], "defender": ["D"], "goalie": ["G"]}
     
-    # Connect to the database that contains player information
-    connection = sqlite3.connect("nhlDatabase.db")
+    # Define the json files that contain all necessary information from the trained models
+    xgboost_info_path = {"forward": "models/xgboost_forward_information_2026-06-19.json",
+                         "defender": "models/xgboost_defender_information_2026-06-19.json",
+                         "goalie": "models/xgboost_goalie_information_2026-06-19.json"}
+    pytorch_info_path = {"forward": "models/pytorch_forward_information_2026-06-19.json",
+                         "defender": "models/pytorch_defender_information_2026-06-19.json",
+                         "goalie": "models/pytorch_goalie_information_2026-06-19.json"}
+                         
+    # Open all model information files
+    xgboost_info = {}
+    pytorch_info = {}
+    for position in positions:
+        with open(xgboost_info_path[position], "r") as xgboost_info_file:
+            xgboost_info[position] = json.load(xgboost_info_file)
+        with open(pytorch_info_path[position], "r") as pytorch_info_file:
+            pytorch_info[position] = json.load(pytorch_info_file)
     
     # ========================== #
     #   Load pretrained models   #
     # ========================== #
     
-    # Load the XGBoost model
-    xgboost_model = xgb.XGBRegressor()
-    xgboost_model.load_model(xgboost_pretrained_path)
+    xgboost_model = {}
+    pytorch_model = {}
+    scaler = {}
     
-    # Define the parameters that were used to train the PyTorch neural network
-    # TODO: These should be loaded from some json file, that is saved together with the model
-    input_dimension = 16
-    hidden_layers = [64, 32, 16]
-    dropout_rate = 0.05
+    for position in positions:
     
-    # Load the PyTorch-based neural network
-    pytorch_model = DeepPlayerNetwork(input_dimension, hidden_layers, dropout_rate)
-    pytorch_model.load_state_dict(torch.load(pytorch_pretrained_path))
+        # Load the XGBoost model
+        xgboost_model[position] = xgb.XGBRegressor()
+        xgboost_model[position].load_model(xgboost_info[position]["path"])
     
-    # Load the scaler for the neural network
-    with open(scaler_pretained_path, "rb") as scaler_file:
-        scaler = pickle.load(scaler_file)
+        # Define the parameters that were used to train the PyTorch neural network
+        input_dimension = pytorch_info[position]["input_dimension"]
+        hidden_layers = pytorch_info[position]["hidden_layers"]
+        dropout_rate = pytorch_info[position]["dropout_rate"]
     
-    # ========================== #
-    #   Predicting new salaries  #
-    # ========================== #
+        # Load the PyTorch-based neural network
+        pytorch_model[position] = DeepPlayerNetwork(input_dimension, hidden_layers, dropout_rate)
+        pytorch_model[position].load_state_dict(torch.load(pytorch_info[position]["path"]))
+    
+        # Load the scaler for the neural network
+        with open(pytorch_info[position]["scaler"], "rb") as scaler_file:
+            scaler[position] = pickle.load(scaler_file)
+    
+    # =================================================================== #
+    #   Predict salaries for all players who played in season 2025-2026   #
+    # =================================================================== #
+    
+    # We can find all players that played in a specific season from the roster view
+    # Make separate lists for forwards, defenders and goalies
+    
+    #player_list = {}
+    
+    #for position in positions:
+    
+        #sql_query = """SELECT player_id FROM roster
+        #              WHERE player_position IN (?) AND season = 2025"""
+        #roster = pd.read_sql_query(sql_query, connection, params=(position_code[position]))
+    
+    # =========================== #
+    #   Predicting new salaries   #
+    # =========================== #
+    
+    # Connect to the database that contains player information
+    connection = sqlite3.connect("nhlDatabase.db")
     
     # Get the information we need to predict salary for Connor Bedard
-    prediction_data = obtain_stats_for_prediction(connection, "Connor Bedard")
+    prediction_data = obtain_stats_for_prediction(connection, "Darren Raddysh")
     print(prediction_data.shape[1])
     
     # Predict the salary for Connor Bedard
-    predict_salaries(connection, prediction_data, xgboost_model, pytorch_model, scaler)
+    predict_salaries(connection, prediction_data, xgboost_model["defender"], pytorch_model["defender"], scaler["defender"])
     
     # Close the connection to the database
     connection.close()

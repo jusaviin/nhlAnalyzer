@@ -50,14 +50,18 @@ def get_weighted_average(df, target_column, weight_columns):
     return numerator.sum() / denominator.sum()
 
 
-def find_all_stats(connection, training_frame, played_ids, weights):
+def find_skater_stats(connection, training_frame, played_ids, weights):
     """
-    Actually go and get all the stats needed for training and predictions
+    Get all the stats needed for training and predictions for skaters
     
     Arguments:
         connection = Connection object to SQLite database from which the player information is read 
         training_frame = Frame to which the stats are attached
         played_ids = All the player IDs for which the stats are searched for
+        weights = Weighting scheme for historical season stats
+        
+    Return:
+        DataFrame with all stats needed for model training
     """
     
     # The stats used in training are currently combined from two different sources. First read the data from simple_skater_stats view
@@ -142,6 +146,95 @@ def find_all_stats(connection, training_frame, played_ids, weights):
     return training_frame_with_stats
     
 
+def find_goalie_stats(connection, training_frame, played_ids, weights):
+    """
+    Get all the stats needed for training and predictions for goalies
+    
+    Arguments:
+        connection = Connection object to SQLite database from which the player information is read 
+        training_frame = Frame to which the stats are attached
+        played_ids = All the player IDs for which the stats are searched for
+        weights = Weighting scheme for historical season stats
+        
+    Return:
+        DataFrame with all stats needed for model training
+    """
+    
+    # The stats used in training are currently combined from two different sources. First read the data from simple_skater_stats view
+    sql_query = f"""SELECT player_id, season, icetime_minutes, save_percentage, goals_against_average, 
+                      xGoals_against_average, reboundsPer60
+                   FROM simple_goalie_stats
+                   WHERE phase = 'regular' AND Situation = 'all'
+                      AND player_id IN ({played_ids})"""
+    simple_stats = pd.read_sql(sql_query, connection)
+    
+    # Query more advanced stats from the database
+    sql_query = f"""SELECT playerId, season, icetime, games_played, playContinuedInZone,
+                      xPlayContinuedInZone, playContinuedOutsideZone, xPlayContinuedOutsideZone, 
+                      playStopped, xPlayStopped, freeze
+                   FROM goalie_season_stats
+                   WHERE phase = 'regular' AND Situation = 'all'
+                      AND playerId IN ({played_ids})"""
+    advanced_stats = pd.read_sql(sql_query, connection)
+    
+    # Once we have all the needed stats loaded, combine these into a single DataFrame
+    # First, we define all the stats that will be present in the final DataFrame
+    training_dict = {"icetime": [], "save_percentage": [], "goals_against_average": [], "goals_saved_above_expected_per60": [], "reboundsPer60": [], "playContinuedInZone_aboveExpected_per60": [], "playContinuedOutsideZone_aboveExpected_per60": [], "freeze_per60": []}
+    
+    # Loop over all the relevant contracts that are in the training_frame
+    for contract in training_frame.itertuples():
+    
+        # Find the player_id and contract_season from the data
+        player_id = contract.player_id
+        contract_season = contract.start_season
+        
+        # Read the relevant stat information for this contract
+        contract_advanced_stats = advanced_stats[(advanced_stats["playerId"] == player_id) & (advanced_stats["season"] < contract_season)]
+        contract_simple_stats = simple_stats[(simple_stats["player_id"] == player_id) & (simple_stats["season"] < contract_season)]
+        
+        # If we have no stats for the player, fill the stats with NaN
+        # We can clean these rows from the table before model training
+        if contract_simple_stats.shape[0] == 0:
+            for key in list(training_dict.keys()):
+                training_dict[key].append(np.nan)
+            continue
+            
+        # Add a weight column to contract_stats by checking the how many seasons before the contract started the stats were obtained
+        contract_advanced_stats["weight"] = contract_advanced_stats["season"].apply(get_weight, args=[contract_season, weights])
+        contract_simple_stats["weight"] = contract_simple_stats["season"].apply(get_weight, args=[contract_season, weights])
+        
+        # To get proper season-by-season weighted averages, we need to calculate derived stats for each season
+        contract_simple_stats["goals_saved_above_expected_per60"] = contract_simple_stats["xGoals_against_average"] - contract_simple_stats["goals_against_average"]
+        
+        contract_advanced_stats["playContinuedInZone_aboveExpected_per60"] = 3600 * (contract_advanced_stats["playContinuedInZone"] - contract_advanced_stats["xPlayContinuedInZone"] ) / contract_advanced_stats["icetime"]
+        contract_advanced_stats["playContinuedOutsideZone_aboveExpected_per60"] = 3600 * (contract_advanced_stats["playContinuedOutsideZone"] - contract_advanced_stats["xPlayContinuedOutsideZone"] ) / contract_advanced_stats["icetime"]
+        contract_advanced_stats["freeze_per60"] = 3600 * contract_advanced_stats["freeze"] / contract_advanced_stats["icetime"]
+        
+        # Calcuate everything we want to use from simple stats
+        training_dict["save_percentage"].append(get_weighted_average(contract_simple_stats, "save_percentage", ["weight", "icetime_minutes"]))
+        training_dict["goals_against_average"].append(get_weighted_average(contract_simple_stats, "goals_against_average", ["weight", "icetime_minutes"]))
+        training_dict["goals_saved_above_expected_per60"].append(get_weighted_average(contract_simple_stats, "goals_saved_above_expected_per60", ["weight", "icetime_minutes"]))
+        training_dict["reboundsPer60"].append(get_weighted_average(contract_simple_stats, "reboundsPer60", ["weight", "icetime_minutes"]))
+        
+        # Calculate everything we want to use from advanced stats
+        training_dict["icetime"].append(get_weighted_average(contract_advanced_stats, "icetime", ["weight"]))
+        training_dict["playContinuedInZone_aboveExpected_per60"].append(get_weighted_average(contract_advanced_stats, "playContinuedInZone_aboveExpected_per60", ["weight", "icetime"]))
+        training_dict["playContinuedOutsideZone_aboveExpected_per60"].append(get_weighted_average(contract_advanced_stats, "playContinuedOutsideZone_aboveExpected_per60", ["weight", "icetime"]))
+        training_dict["freeze_per60"].append(get_weighted_average(contract_advanced_stats, "freeze_per60", ["weight", "icetime"]))
+        
+    # Once we have all the information we need, construct a new DataFrame from the dictionary
+    stats_frame = pd.DataFrame(training_dict)
+
+    # Concatenate this with training_frame
+    training_frame_with_stats = pd.concat([training_frame, stats_frame], axis=1)
+    
+    # Clean any rows with NaN values
+    training_frame_with_stats.dropna(how="any", inplace=True, ignore_index=True)
+    
+    # Return the frame with all the stats attached to it
+    return training_frame_with_stats
+    
+
 def obtain_stats_for_prediction(connection, player, weights = [0.01, 1, 0.8, 0.6, 0.3, 0.1]):
     """
     Get the information needed to predict new contract for a specific player assuming the contract is signed today
@@ -167,7 +260,7 @@ def obtain_stats_for_prediction(connection, player, weights = [0.01, 1, 0.8, 0.6
                  
     player_frame = pd.read_sql(sql_query, connection)
     
-    # We need to modify a couple of columns in the player_frame in order to properly use the find_all_stats function
+    # We need to modify a couple of columns in the player_frame in order to properly use the find_skater_stats function
     player_frame.rename(columns={"id": "player_id"}, inplace=True)
     player_frame["start_season"] = 2026
     
@@ -175,28 +268,62 @@ def obtain_stats_for_prediction(connection, player, weights = [0.01, 1, 0.8, 0.6
     player_id = player_frame.loc[0,"player_id"]
     
     # Find the stats needed for predictions
-    prediction_frame = find_all_stats(connection, player_frame, player_id, weights)
+    prediction_frame = find_skater_stats(connection, player_frame, player_id, weights)
     
     # Return the prediction frame. Keep the id and player name information for now, such that it can be used for printouts even though it need to be disabled for prediction
     return prediction_frame
 
 
-def obtain_training_data(connection, weights = [0.01, 1, 0.8, 0.6, 0.3, 0.1]):
+def obtain_training_data(connection, position, weights = [0.01, 1, 0.8, 0.6, 0.3, 0.1]):
     """
     Function to collect from database all the necessary data that is needed to train the salary predictor model
     
     Arguments:
-        connection = Connection object to SQLite database from which the player information is read 
+        connection = Connection object to SQLite database from which the player information is read
+        position = Position of the players for which the data is obtained
     
     Return:
         DataFrame with all the necessary data to train a salary predictor model
     """
     
+    # Build the queries based on the position of the players for which the data is
+    position_code = position.lower()[0]
+    
+    match position_code:
+        case "f":
+        # Queries for forward data
+            table = "skater_training_data"
+            positions = " WHERE position IN ('R', 'L', 'C')"
+            skater = True
+            
+        case "d":
+        # Queries for defender data
+            table = "skater_training_data"
+            positions = " WHERE position = 'D'"
+            skater = True
+            
+        case "g":
+        # Queries for goalie data
+            table = "goalie_training_data"
+            positions = ""
+            skater = False
+            
+        case _:
+        # Unknown position, return an empty dataframe
+            print("Error in obtain_training_data: unknown player position given!")
+            print("Possible positions are forward, defender or goalkeeper.")
+            print("Returning empty DataFrame. This will probably crash the code soon.")
+            return pd.DataFrame()
+    
     # Read all the contracts that need stats from skater_training_data view
-    sql_query = "SELECT player_id, start_season, age, salary_cap_fraction FROM skater_training_data"
+    sql_query = f"SELECT player_id, start_season, age, salary_cap_fraction FROM {table}{positions}"
     training_frame = pd.read_sql(sql_query, connection)
     
-    training_frame_with_stats = find_all_stats(connection, training_frame, "SELECT DISTINCT(player_id) FROM skater_training_data", weights)
+    # Skaters and goalies have different stats
+    if skater:
+        training_frame_with_stats = find_skater_stats(connection, training_frame, f"SELECT DISTINCT(player_id) FROM {table}{positions}", weights)
+    else:
+        training_frame_with_stats = find_goalie_stats(connection, training_frame, f"SELECT DISTINCT(player_id) FROM {table}{positions}", weights)
     
     # Remove information not necessary for training that was used to find the correct stats
     training_frame_with_stats.drop(columns=["player_id", "start_season"], inplace=True)

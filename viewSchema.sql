@@ -15,6 +15,7 @@ CREATE VIEW roster
     season,
     team_code,
     team_name,
+    player_id,
     player_first_name,
     player_last_name,
     player_position,
@@ -28,7 +29,7 @@ CREATE VIEW roster
     city_longitude,
     city_latitude
 ) AS
-SELECT S.season, T.code, T.name, P.first_name, P.last_name, P.position, P.birth_date, P.headshot,
+SELECT S.season, T.code, T.name, P.id, P.first_name, P.last_name, P.position, P.birth_date, P.headshot,
        C.name_local, C.name_english, C.state, C.state_code, C.country, C.longitude, C.latitude
 FROM players P
 JOIN skater_season_stats S
@@ -41,7 +42,7 @@ WHERE S.phase = 'regular' AND S.situation = 'all'
 
 UNION ALL
 
-SELECT G.season, T.code, T.name, P.first_name, P.last_name, P.position, P.birth_date, P.headshot,
+SELECT G.season, T.code, T.name, P.id, P.first_name, P.last_name, P.position, P.birth_date, P.headshot,
        C.name_local, C.name_english, C.state, C.state_code, C.country, C.longitude, C.latitude
 FROM players P
 JOIN goalie_season_stats G
@@ -60,6 +61,7 @@ SELECT G.season AS season,
        G.situation AS situation,
        T.code AS team_code,
        T.name AS team_name,
+       P.id AS player_id,
        P.first_name AS first_name,
        P.last_name AS last_name,
        G.games_played AS games_played,

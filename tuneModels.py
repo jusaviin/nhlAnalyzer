@@ -5,7 +5,7 @@ import numpy as np
 import pandas as pd
 
 import xgboost as xgb
-from sklearn.model_selection import train_test_split, KFold
+from sklearn.model_selection import train_test_split, KFold, GridSearchCV
 from sklearn.metrics import r2_score
 from sklearn.preprocessing import StandardScaler
 
@@ -22,12 +22,13 @@ from optuna.pruners import MedianPruner
 from datetime import date
 import pickle
 import os
+import json
 
 from pytorchPlayerNetwork import PlayerDataset, DeepPlayerNetwork
 from playerDataFunctions import obtain_training_data
 
 
-def train_pytorch_kfold(features, salary, k, hidden_dimensions, dropout_rate, learning_rate, nEpoch, patience):
+def train_pytorch_kfold(features, salary, k, hidden_dimensions, dropout_rate, learning_rate, batch_size, nEpoch, patience):
     """
     Do a k-fold validation to get a realistic estimate of the model performance.
     
@@ -38,6 +39,7 @@ def train_pytorch_kfold(features, salary, k, hidden_dimensions, dropout_rate, le
         hidden_dimensions = A list defining the number of neurons in each fully connected hidden layer
         dropout_rate = Dropout rate applied to each hidden layer
         learning_rate = Learning rate for the Adam optimizer
+        batch_size = Batch size for training
         nEpoch = Maximum number of epochs to train each fold
         patience = Stop the training if validation loss doesn't improve over patience epochs
         
@@ -87,7 +89,7 @@ def train_pytorch_kfold(features, salary, k, hidden_dimensions, dropout_rate, le
         # Create datasets and dataloaders
         train_loader = DataLoader(
             PlayerDataset(features_train_fold, salary_train_fold),
-            batch_size=32, shuffle=True
+            batch_size=batch_size, shuffle=True
         )
         val_loader = DataLoader(
             PlayerDataset(features_validation_fold, salary_validation_fold),
@@ -335,8 +337,48 @@ def visualize_training(loss_epoch, r_squared_epoch):
     # Draw the plots
     plt.tight_layout()
     plt.show()
+    
+    
+def visualize_feature_importances(feature_names, feature_importances):
+    """
+    Make a bar chart showing how XGBoost ranks different features in the model
+    
+    Arguments:
+        feature_names = Names of features used to fit the model
+        feature_importances = Importance of each feature as decided by XGBoost
+    """
+    
+    # Sort the importance scores
+    importances_with_scores = zip(feature_names, feature_importances)
+    sorted_importances = sorted(importances_with_scores, key=lambda x: x[1], reverse=True)
+    features_for_plot, importance_scores = zip(*sorted_importances)
+
+    # Make a bar plot with seaborn to visualize the feature importances
+    fig, ax = plt.subplots(figsize=(6, 7))
+    sns.barplot(x=features_for_plot, y=importance_scores, ax=ax)
+    ax.set_ylabel("Feature importances")
+    plt.xticks(rotation=90)
+    plt.tight_layout()
+    plt.show()
+    
+
+def plot_feature_correlations(feature_frame, position):
+    """
+    Plot pairwise correlations for all features and for salary
+    """
+    
+    # Order the columns in the feature_frame such that the target salary is the first column
+    ordered_frame = pd.concat([feature_frame[["salary_cap_fraction"]], feature_frame.drop(columns=["salary_cap_fraction"])], axis=1)
+    
+    # Plot the pairwise correlations for all features
+    correlation_plot = sns.pairplot(ordered_frame)
+    correlation_plot.savefig(f"feature_correlations_{position}.png", dpi=100, bbox_inches='tight')
+    
+    # Do not show the figure on the screen
+    plt.close()
+    
   
-def objective(trial, features, targets):
+def objective(trial, features, targets, batch_size):
     """
     Objective function for Optuna to optimize.
     
@@ -365,7 +407,8 @@ def objective(trial, features, targets):
         hidden_dimensions=hidden_dimensions,
         dropout_rate=dropout,
         learning_rate=learning_rate,
-        nEpoch=400,
+        batch_size=batch_size,
+        nEpoch=1000,
         patience=25
     )
     
@@ -373,19 +416,31 @@ def objective(trial, features, targets):
     return np.mean(kfold_results["validation_rsquared"])
   
   
-def evaluate_models(true_salary, model_predictions, plot_kde=True):
+def evaluate_models(true_salary, model_predictions, model_json, plot_kde=True):
     """
     Evaluate models by calculating their R^2 score and plotting kernel density estimates
     
     Arguments:
         true_salary = List containing true salaries
         model_predictions = Dictionary containing predictions for different models
+        model_json = Json file for recording the r2 score for each model
         plot_kde = Plot kernel density estimates for true and predicted salaries
     """
     
     # Start by printing the R^2 scores
     for model, prediction in model_predictions.items():
-        print("{}: R^2 score on testing data: {}".format(model, r2_score(true_salary, prediction)))
+        rsquared = r2_score(true_salary, prediction)
+        print("{}: R^2 score on testing data: {}".format(model, rsquared))
+        
+        # If json file for the model is provided, add r2 value to the file
+        if model in model_json:
+            with open(model_json[model], "r") as model_file:
+                info_dict = json.load(model_file)
+                
+            info_dict["r2_score"] = rsquared
+            
+            with open(model_json[model], "w") as model_file:
+                json.dump(info_dict, model_file, indent=4)
         
     if plot_kde:
         
@@ -436,203 +491,351 @@ def main():
     The trained models can be saved to files for predictions in other macros.
     """
     
+    # ======================= #
+    #   Basic configuration   #
+    # ======================= #
+    
     # Today's data for model saving
     today = date.today().strftime("%Y-%m-%d")
     
+    # Define the position for which the training is done
+    selected_positions = ["forward", "defender", "goalie"]
+    
+    # Sanity check for position
+    for position in selected_positions:
+        if position not in ["forward", "defender", "goalie"]:
+            print(f"ERROR! Unknown position: {position}")
+            print("Available positions are forward, defender and goalie")
+            exit()
+    
     # Variables defining if we should save models to file
     save_xgboost = True
-    xgboost_model_name = f"models/xgboost_forward_salary_{today}.json"
-    pytorch_tune_hyperparameters = False
     save_pytorch = True
-    pytorch_model_name = f"models/pytorch_forward_salary_{today}.pth"
-    scaler_file_name = f"models/standard_scaler_for_pytorch_{today}.pkl"
+    
+    # Variables defining which tuning steps should be made
+    xgboost_tune_hyperparameters = False
+    pytorch_tune_hyperparameters = False
+    n_trials_optuna = 300
+    draw_feature_importances = False
+    draw_feature_correlations = False
+    draw_pytorch_training_qa = False
+    
+    # ============================================ #
+    #   Model hyperparameters and data selection   #
+    # ============================================ #
+    
+    # Include minimum icetime of three full games for goalies to be included in the training
+    icetime_variable = {"forward": "games_played", "defender": "games_played", "goalie": "icetime"}
+    minimum_icetime = {"forward": 0, "defender": 0, "goalie": 180*60}
+        
+    # Default XGBoost configuration if not doing hyperparameter tuning
+    xgb_n_estimators = {"forward": 100, "defender": 100, "goalie": 100}
+    xbg_reg_alpha = {"forward": 0, "defender": 0, "goalie": 0.1}
+    xgb_reg_lambda = {"forward": 10, "defender": 10, "goalie": 10}
+    xgb_max_depth = {"forward": 4, "defender": 8, "goalie": 8}
+    xgb_min_child_weight = {"forward": 2, "defender": 3, "goalie": 1}
+    xgb_subsample = {"forward": 0.85, "defender": 1, "goalie": 0.85}
+        
+    # Default PyTorch configuration if not doing hyperparameter tuning
+    hidden_layers = {"forward": [64, 31, 12], "defender": [64, 25, 12], "goalie": [64, 32, 6]}
+    dropout_rate = {"forward": 0.0645, "defender": 0.0333, "goalie": 0.057}
+    learning_rate = {"forward": 0.00048, "defender": 0.00032, "goalie": 0.00086}
+    batch_size = 32
     
     # Connect to the database that contains player information
     connection = sqlite3.connect("nhlDatabase.db")
     
-    # ========================= #
-    #   Prepare training data   #
-    # ========================= #
+    # Loop over all selected positions and train the models
+    for position in selected_positions:
     
-    print("Preparing training data")
+        # Files containing model versioning information
+        xgboost_model_information = f"models/xgboost_{position}_information_{today}.json"
+        pytorch_model_information = f"models/pytorch_{position}_information_{today}.json"
     
-    # Find the training data for the model
-    training_data = obtain_training_data(connection)
+        # Naming for saved models
+        xgboost_model_name = f"models/xgboost_{position}_salary_{today}.json"
+        pytorch_model_name = f"models/pytorch_{position}_salary_{today}.pth"
+        pytorch_architecture_name = f"models/architecture_for_pytorch_{position}_{today}.json"
+        scaler_file_name = f"models/scaler_for_pytorch_{position}_{today}.pkl"
     
-    # Split training data into training and testing to have consistent datasets if training multiple models
-    features = training_data.drop(columns=["salary_cap_fraction"]).to_numpy()
-    salary = training_data["salary_cap_fraction"].to_numpy()
-    features_train, features_test, salary_train, salary_test = train_test_split(features, salary, test_size=0.25, random_state=42)
+        # ========================= #
+        #   Prepare training data   #
+        # ========================= #
     
-    # =========================== #
-    #   Model training: XGBoost   #
-    # =========================== #
+        print("Preparing training data")
     
-    print("Training XGBoost model")
+        # Find the training data for the model for forwards
+        training_data = obtain_training_data(connection, position)
     
-    # Train an XGBoost model with training data
-    xgboost_model = xgb.XGBRegressor(objective="reg:squarederror", n_estimators=100, random_state=42, reg_alpha=0.1, reg_lambda=10, max_depth=4, min_child_weight=2, subsample=0.7)
-    xgboost_model.fit(features_train, salary_train)
-        
-    # Get the prediction from the XGBoost model
-    xgboost_prediction = xgboost_model.predict(features_test)
+        # Cut for minimum icetime
+        training_data = training_data[training_data[icetime_variable[position]] > minimum_icetime[position]]
     
-    # Save XGBoost model trained with the full dataset into a file
-    if save_xgboost:
+        # Split training data into training and testing to have consistent datasets if training multiple models
+        features = training_data.drop(columns=["salary_cap_fraction"]).to_numpy()
+        salary = training_data["salary_cap_fraction"].to_numpy()
+        features_train, features_test, salary_train, salary_test = train_test_split(features, salary, test_size=0.25, random_state=42)
     
-        # Train XGBoost model with the full dataset for final predictions
-        xgboost_full_model = xgb.XGBRegressor(objective="reg:squarederror", n_estimators=100, random_state=42, reg_alpha=0.1, reg_lambda=10, max_depth=4, min_child_weight=2, subsample=0.7)
-        xgboost_full_model.fit(features, salary)
+        # Draw the correlations between different features
+        if draw_feature_correlations:
+            plot_feature_correlations(training_data, position)
     
-        # Save to file
-        xgboost_full_model.save_model(xgboost_model_name)
-        
-    # =========================== #
-    #   Model training: PyTorch   #
-    # =========================== #
+        # =========================== #
+        #   Model training: XGBoost   #
+        # =========================== #
     
-    print("Training PyTorch model")
-    torch.manual_seed(42)
+        print("Training XGBoost model")
     
-    # Optional: hyperparameter tuning for PyTorch
-    if pytorch_tune_hyperparameters:
-    
-        # Run optuna optimization study where we maximize the R^2 value of the model
-        study = optuna.create_study(
-            direction="maximize",
-            pruner=MedianPruner()
-        )
-    
-        # Set manually parameters we know to be good for the first trial
-        study.enqueue_trial({
-            "hidden1": 64,
-            "hidden2": 32,
-            "hidden3": 16,
-            "dropout": 0.05,
-            "learning_rate": 0.0001
-        })
+        # Optional: hyperparameter tuning for XGBoost
+        if xgboost_tune_hyperparameters:
+            
+            # Define the XGBoost model
+            xgboost_tuning = xgb.XGBRegressor(objective="reg:squarederror", n_estimators=100, random_state=42)
 
-        # Run the study with only training data. Testing data is reserved for final evaluation
-        study.optimize(
-            lambda trial: objective(trial, features_train, salary_train),
-            n_trials=300
-        )
+            # Define hyperparameters to be scanned
+            param_grid = {
+                "max_depth": [4, 6, 8],         # Tree depth. Default: 6
+                "min_child_weight": [1, 2, 3],  # Min samples per leaf. Default: 1
+                "subsample": [0.7, 0.85, 1],    # Row sampling. Default: 1
+                "lambda": [0.1, 1.0, 10],       # L2 regularization. Default: 1
+                "alpha": [0, 0.1, 1.0]          # L1 regularization. Default: 0
+            }
+            
+            # Perform the scan with 5 folds
+            grid_search = GridSearchCV(xgboost_tuning, param_grid, cv=5,scoring='r2', verbose=1)
+            grid_search.fit(features_train, salary_train)
+            
+            # Find the best parameters
+            xbg_reg_alpha[position] = grid_search.best_params_["alpha"]
+            xgb_reg_lambda[position] = grid_search.best_params_["lambda"]
+            xgb_max_depth[position] = grid_search.best_params_["max_depth"]
+            xgb_min_child_weight[position] = grid_search.best_params_["min_child_weight"]
+            xgb_subsample[position] = grid_search.best_params_["subsample"]
+            
+            # Print the best parameters to console
+            print(f"\nBest XGBoost configuration:")
+            print(f"  reg_alpha: {xbg_reg_alpha[position]}")
+            print(f"  reg_lambda: {xgb_reg_lambda[position]}")
+            print(f"  max_depth: {xgb_max_depth[position]}")
+            print(f"  min_child_weight: {xgb_min_child_weight[position]}")
+            print(f"  subsample: {xgb_subsample[position]}")
     
-        # Get the best trial
-        best_trial = study.best_trial
-        print(f"\n{'='*60}")
-        print(f"Best R²: {best_trial.value:.4f}")
-        print(f"Best params: {best_trial.params}")
-        print(f"{'='*60}")
-
-        # Extract best hyperparameters
-        hidden_layers = [
-            best_trial.params["hidden1"],
-            best_trial.params["hidden2"],
-            best_trial.params["hidden3"]
-        ]
-        dropout_rate = best_trial.params["dropout"]
-        learning_rate = best_trial.params["learning_rate"]
-
-        # Print the best parameters to console
-        print(f"\nBest configuration:")
-        print(f"  Hidden layers: {best_hidden_dims}")
-        print(f"  Dropout: {best_dropout}")
-        print(f"  Learning rate: {best_learning_rate}")
+        # Train an XGBoost model with training data
+        xgboost_model = xgb.XGBRegressor(
+                            objective = "reg:squarederror",
+                            n_estimators = xgb_n_estimators[position],
+                            random_state = 42,
+                            reg_alpha = xbg_reg_alpha[position],
+                            reg_lambda = xgb_reg_lambda[position],
+                            max_depth = xgb_max_depth[position],
+                            min_child_weight = xgb_min_child_weight[position],
+                            subsample = xgb_subsample[position]
+                        )
+        xgboost_model.fit(features_train, salary_train)
         
-    else:
-        # If we are not tuning hyperparameters, use the best hyperparameters found from previous tuning runs
-        hidden_layers = [64, 32, 16]   # [64,32,16] [64,12,8]
-        dropout_rate = 0.05 # 0.06, 0.05
-        learning_rate = 0.0001 # 0.0008, 0.0001
+        # Get the prediction from the XGBoost model
+        xgboost_prediction = xgboost_model.predict(features_test)
     
-    # Train a model with training set and obtain a prediction from the testing set to evaluate the model
+        # Save XGBoost model trained with the full dataset into a file
+        if save_xgboost:
     
-    # Unlike decision trees, neural networks are sensitive to absolute feature scales
-    # Thus, for PyTorch we need to scale the input features in order to achieve good performance
-    # Use the StandardScaler from scikit-learn to do this
-    # This scales the mean of each feature to 0 and standard deviation to 1
-    # Note that scaling is only learned from training features
-    scaler = StandardScaler()
-    features_train_scaled = scaler.fit_transform(features_train)
-    features_test_scaled = scaler.transform(features_test)
+            # Train XGBoost model with the full dataset for final predictions
+            xgboost_full_model = xgb.XGBRegressor(
+                                     objective = "reg:squarederror",
+                                     n_estimators = xgb_n_estimators[position],
+                                     random_state = 42,
+                                     reg_alpha = xbg_reg_alpha[position],
+                                     reg_lambda = xgb_reg_lambda[position],
+                                     max_depth = xgb_max_depth[position],
+                                     min_child_weight = xgb_min_child_weight[position],
+                                     subsample = xgb_subsample[position]
+                                 )
+            xgboost_full_model.fit(features, salary)
     
-    # Convert datasets into tensors that can be consumed by PyTorch
-    tensor_train_data = PlayerDataset(features_train_scaled, salary_train)
-    tensor_test_data = PlayerDataset(features_test_scaled, salary_test)
+            # Save to file
+            xgboost_full_model.save_model(xgboost_model_name)
+            
+            # Create an information file with all necessary information to use the model
+            xgboost_info = {
+                "version": f"xgboost_{position}_{today}",
+                "path": xgboost_model_name
+            }
+            
+            with open(xgboost_model_information, "w") as xgb_info_file:
+                json.dump(xgboost_info, xgb_info_file, indent=4)
+      
+        # Visualize how important each feature is for XGBoost model
+        if draw_feature_importances:
+            visualize_feature_importances(training_data.drop(columns=["salary_cap_fraction"]).columns.tolist(), xgboost_model.feature_importances_)
+      
+        # =========================== #
+        #   Model training: PyTorch   #
+        # =========================== #
     
-    # Define the number of neurons in the neural network
-    pytorch_model = DeepPlayerNetwork(features_train_scaled.shape[1],hidden_layers,dropout_rate)
+        print("Training PyTorch model")
+        torch.manual_seed(42)
     
-    # Define criterion for the loss function and optimizer
-    criterion = nn.MSELoss()
-    optimizer = torch.optim.Adam(pytorch_model.parameters(), lr=learning_rate)
+        # Optional: hyperparameter tuning for PyTorch
+        if pytorch_tune_hyperparameters:
     
-    # Define batch sizes for training and testing
-    train_loader = DataLoader(dataset=tensor_train_data, batch_size=32, shuffle=True)
-    test_loader = DataLoader(dataset=tensor_test_data, batch_size=128, shuffle=False)
+            # Run optuna optimization study where we maximize the R^2 value of the model
+            study = optuna.create_study(
+                direction="maximize",
+                pruner=MedianPruner()
+            )
     
-    # Train the PyTorch model while collecting loss and R^2 information during training
-    nEpoch = 400
-    patience = 25
-    pytorch_model_path = f"pytorch_training_model.pth"
-    
-    loss_epoch, r_squared_epoch, _ = train_pytorch_model(pytorch_model, criterion, optimizer, train_loader, test_loader, nEpoch, early_stopping=True, patience=patience, save_path=pytorch_model_path)
-    visualize_training(loss_epoch, r_squared_epoch)
+            # Set manually parameters we know to be good for the first trial
+            # This ensures that the hyperparameter tuning result is at least as good as the default result
+            study.enqueue_trial({
+                "hidden1": hidden_layers[position][0],
+                "hidden2": hidden_layers[position][1],
+                "hidden3": hidden_layers[position][2],
+                "dropout": dropout_rate[position],
+                "learning_rate": learning_rate[position]
+            })
 
-    # Get the prediction from the model
-    pytorch_model.eval()
-    all_predictions = []
-    with torch.no_grad():
-        for x, y in test_loader:
-            yhat = pytorch_model(x)
-            all_predictions.append(yhat.cpu().numpy())
-    pytorch_prediction = np.concatenate(all_predictions, axis=0)
-    pytorch_prediction = pytorch_prediction.squeeze()
+            # Run the study with only training data. Testing data is reserved for final evaluation
+            study.optimize(
+                lambda trial: objective(trial, features_train, salary_train, batch_size),
+                n_trials=n_trials_optuna
+            )
     
-    # Train PyTorch model with full dataset and save the resulting model to a file
-    if save_pytorch:
-    
-        # Do a k-fold validation for the PyTorch model to determine nepoch for the full model:
-        k = 5
-        _, nEpoch = train_pytorch_kfold(features, salary, k, hidden_layers, dropout_rate, learning_rate, nEpoch, patience)
+            # Get the best trial
+            best_trial = study.best_trial
+            print(f"\n{'='*60}")
+            print(f"Best R²: {best_trial.value:.4f}")
+            print(f"Best params: {best_trial.params}")
+            print(f"{'='*60}")
+
+            # Extract best hyperparameters
+            hidden_layers[position] = [
+                best_trial.params["hidden1"],
+                best_trial.params["hidden2"],
+                best_trial.params["hidden3"]
+            ]
+            dropout_rate[position] = best_trial.params["dropout"]
+            learning_rate[position] = best_trial.params["learning_rate"]
+
+            # Print the best parameters to console
+            print(f"\nBest PyTorch configuration:")
+            print(f"  Hidden layers: {hidden_layers[position]}")
+            print(f"  Dropout: {dropout_rate[position]}")
+            print(f"  Learning rate: {learning_rate[position]}")
         
-        # Use the full dataset to train the final model for predictions
+    
+        # Train a model with training set and obtain a prediction from the testing set to evaluate the model
+    
+        # Unlike decision trees, neural networks are sensitive to absolute feature scales
+        # Thus, for PyTorch we need to scale the input features in order to achieve good performance
+        # Use the StandardScaler from scikit-learn to do this
+        # This scales the mean of each feature to 0 and standard deviation to 1
+        # Note that scaling is only learned from training features
         scaler = StandardScaler()
-        features_full = scaler.fit_transform(features)
+        features_train_scaled = scaler.fit_transform(features_train)
+        features_test_scaled = scaler.transform(features_test)
     
-        # Convert the full dataset into tensors that can be consumed by PyTorch
-        tensor_full_data = PlayerDataset(features_full, salary)
+        # Convert datasets into tensors that can be consumed by PyTorch
+        tensor_train_data = PlayerDataset(features_train_scaled, salary_train)
+        tensor_test_data = PlayerDataset(features_test_scaled, salary_test)
     
         # Define the number of neurons in the neural network
-        pytorch_full_model = DeepPlayerNetwork(features_full.shape[1],hidden_layers,dropout_rate)
+        pytorch_model = DeepPlayerNetwork(features_train_scaled.shape[1], hidden_layers[position], dropout_rate[position])
     
         # Define criterion for the loss function and optimizer
         criterion = nn.MSELoss()
-        optimizer = torch.optim.Adam(pytorch_full_model.parameters(), lr=learning_rate)
+        optimizer = torch.optim.Adam(pytorch_model.parameters(), lr=learning_rate[position])
     
-        # Define batch size for training the model
-        full_train_loader = DataLoader(dataset=tensor_full_data, batch_size=32, shuffle=True)
+        # Define batch sizes for training and testing
+        train_loader = DataLoader(dataset=tensor_train_data, batch_size=batch_size, shuffle=True)
+        test_loader = DataLoader(dataset=tensor_test_data, batch_size=128, shuffle=False)
+    
+        # Train the PyTorch model while collecting loss and R^2 information during training
+        nEpoch = 1000
+        patience = 25
+        pytorch_model_path = f"pytorch_training_model.pth"
+    
+        loss_epoch, r_squared_epoch, _ = train_pytorch_model(pytorch_model, criterion, optimizer, train_loader, test_loader, nEpoch, early_stopping=True, patience=patience, save_path=pytorch_model_path)
         
-        # Train the model
-        train_pytorch_model(pytorch_full_model, criterion, optimizer, full_train_loader, None, nEpoch, early_stopping=False)
+        if draw_pytorch_training_qa:
+            visualize_training(loss_epoch, r_squared_epoch)
+
+        # Get the prediction from the model
+        pytorch_model.eval()
+        all_predictions = []
+        with torch.no_grad():
+            for x, y in test_loader:
+                yhat = pytorch_model(x)
+                all_predictions.append(yhat.cpu().numpy())
+        pytorch_prediction = np.concatenate(all_predictions, axis=0)
+        pytorch_prediction = pytorch_prediction.squeeze()
+    
+        # Train PyTorch model with full dataset and save the resulting model to a file
+        if save_pytorch:
+    
+            # Do a k-fold validation for the PyTorch model to determine nepoch for the full model:
+            k = 5
+            _, nEpoch = train_pytorch_kfold(features, salary, k, hidden_layers[position], dropout_rate[position], learning_rate[position], batch_size, nEpoch, patience)
         
-        # Save the model and the used standard scaler to a file for predictions
-        torch.save(pytorch_full_model.state_dict(), pytorch_model_name)
+            # Use the full dataset to train the final model for predictions
+            # We use here DataFrame to fit intead of features numpy-array since later
+            # the column names can be used as sanity check that fitting is done correctly
+            # In the numpy-array the column name information is lost
+            scaler = StandardScaler()
+            features_full = scaler.fit_transform(training_data.drop(columns=["salary_cap_fraction"]))
+    
+            # Convert the full dataset into tensors that can be consumed by PyTorch
+            tensor_full_data = PlayerDataset(features_full, salary)
+    
+            # Define the number of neurons in the neural network
+            pytorch_full_model = DeepPlayerNetwork(features_full.shape[1], hidden_layers[position], dropout_rate[position])
+    
+            # Define criterion for the loss function and optimizer
+            criterion = nn.MSELoss()
+            optimizer = torch.optim.Adam(pytorch_full_model.parameters(), lr=learning_rate[position])
+    
+            # Define batch size for training the model
+            full_train_loader = DataLoader(dataset=tensor_full_data, batch_size=batch_size, shuffle=True)
         
-        with open(scaler_file_name,"wb") as scaler_file:
-            pickle.dump(scaler, scaler_file)
+            # Train the model
+            train_pytorch_model(pytorch_full_model, criterion, optimizer, full_train_loader, None, nEpoch, early_stopping=False)
+        
+            # Save the model and the used standard scaler to a file for predictions
+            torch.save(pytorch_full_model.state_dict(), pytorch_model_name)
+            
+            # Save the standard scaler that needs to be used with the model
+            with open(scaler_file_name,"wb") as scaler_file:
+                pickle.dump(scaler, scaler_file)
+                
+            # Create an information file with all necessary information to use the model
+            pytorch_info = {
+                "version": f"pytorch_{position}_{today}",
+                "input_dimension": features_full.shape[1],
+                "hidden_layers": hidden_layers[position],
+                "dropout_rate": dropout_rate[position],
+                "learning_rate": learning_rate[position],
+                "batch_size": batch_size,
+                "path": pytorch_model_name,
+                "scaler": scaler_file_name
+            }
+            
+            with open(pytorch_model_information, "w") as pytorch_info_file:
+                json.dump(pytorch_info, pytorch_info_file, indent=4)
     
-    # ===================== #
-    #   Model evaluations   #
-    # ===================== #
+        # ===================== #
+        #   Model evaluations   #
+        # ===================== #
     
-    # Combine models and use the one for which the kernel density function is closer to true salary
-    combined_prediction = np.where((pytorch_prediction < 0.0215) & (xgboost_prediction < 0.0215), xgboost_prediction, pytorch_prediction)
+        # Combine models and use the one for which the kernel density function is closer to true salary
+        # combined_prediction = np.where((pytorch_prediction < 0.0215) & (xgboost_prediction < 0.0215), xgboost_prediction, pytorch_prediction)
     
-    # Run the model evaluation function
-    model_predictions = {"XGBoost": xgboost_prediction, "PyTorch": pytorch_prediction, "Combined": combined_prediction}
-    evaluate_models(salary_test, model_predictions)
+        # Run the model evaluation function
+        model_predictions = {"XGBoost": xgboost_prediction, "PyTorch": pytorch_prediction}
+        model_json = {}
+        if save_xgboost:
+            model_json["XGBoost"] = xgboost_model_information
+        if save_pytorch:
+            model_json["PyTorch"] = pytorch_model_information
+            
+        evaluate_models(salary_test, model_predictions, model_json)
     
     
     # Close the connection to the database
